@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Transactions
+      AttributeDefinitions:
+        - AttributeName: user_id 
+          AttributeType: S
+        - AttributeName: date_ts 
+          AttributeType: N
+      KeySchema:
+        - AttributeName: user_id; KeyType: HASH
+        - AttributeName: date_ts; KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/ingest.lambda_handler
+      Runtime: python3.10
+      CodeUri: ./handlers
+      Environment:
+        Variables:
+          TRANSACTIONS_TABLE: !Ref TransactionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransactionsTable
+      Events:
+        IngestApi:
+          Type: Api
+          Properties:
+            Path: /ingest
+            Method: post
+
+  ReportsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/reports.lambda_handler
+      Runtime: python3.10
+      CodeUri: ./handlers
+      Environment:
+        Variables:
+          TRANSACTIONS_TABLE: !Ref TransactionsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TransactionsTable
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(7 days)

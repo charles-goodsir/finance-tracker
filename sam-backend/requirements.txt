@@ -1,0 +1,20 @@
+# Core AWS SDK
+boto3
+
+# Environment variables
+python-dotenv
+
+# Web framework (if you expose an API)
+fastapi
+uvicorn[standard]
+
+# Database client (optional, if using DynamoDB or PostgreSQL/MySQL)
+sqlalchemy        # for SQL DBs
+psycopg2-binary   # if you use PostgreSQL
+# pymysql         # if you use MySQL
+
+# Data handling
+pandas
+
+# Requests for external APIs (e.g., currency rates, bank feeds)
+requests

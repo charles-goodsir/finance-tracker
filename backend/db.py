@@ -3,6 +3,7 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "finance.db"
 
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -20,6 +21,7 @@ def init_db():
     )
     conn.commit()
     conn.close()
+
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
