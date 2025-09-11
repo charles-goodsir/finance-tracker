@@ -11,15 +11,17 @@ Resources:
         - AttributeName: date_ts 
           AttributeType: N
       KeySchema:
-        - AttributeName: user_id; KeyType: HASH
-        - AttributeName: date_ts; KeyType: RANGE
+        - AttributeName: user_id 
+          KeyType: HASH
+        - AttributeName: date_ts 
+          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
   IngestFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: handlers/ingest.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.11
       CodeUri: ./handlers
       Environment:
         Variables:
@@ -38,7 +40,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: handlers/reports.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.11
       CodeUri: ./handlers
       Environment:
         Variables:
