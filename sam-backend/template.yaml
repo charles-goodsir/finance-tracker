@@ -1,55 +1,98 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+Description: 'Finance Tracker 2.0 - Enhanced FastAPI Application'
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.11
+    Environment:
+      Variables:
+        TRANSACTIONS_TABLE: !Ref TransactionsTable
+        CATEGORIES_TABLE: !Ref CategoriesTable
+        RECURRING_TABLE: !Ref RecurringTable
+
 Resources:
+  # DynamoDB Tables
   TransactionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Transactions
+      TableName: FinanceTracker-Transactions
       AttributeDefinitions:
-        - AttributeName: user_id 
+        - AttributeName: user_id
           AttributeType: S
-        - AttributeName: date_ts 
-          AttributeType: N
+        - AttributeName: transaction_id
+          AttributeType: S
       KeySchema:
-        - AttributeName: user_id 
+        - AttributeName: user_id
           KeyType: HASH
-        - AttributeName: date_ts 
+        - AttributeName: transaction_id
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
-  IngestFunction:
+  CategoriesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FinanceTracker-Categories
+      AttributeDefinitions:
+        - AttributeName: category_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: category_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  RecurringTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FinanceTracker-Recurring
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: recurring_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: recurring_id
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  # Main FastAPI Lambda Function
+  FinanceTrackerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: handlers/ingest.lambda_handler
+      CodeUri: ../
+      Handler: handlers/fastapi.handler
       Runtime: python3.11
-      CodeUri: ./handlers
       Environment:
         Variables:
           TRANSACTIONS_TABLE: !Ref TransactionsTable
+          CATEGORIES_TABLE: !Ref CategoriesTable
+          RECURRING_TABLE: !Ref RecurringTable
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TransactionsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CategoriesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecurringTable
       Events:
-        IngestApi:
+        Api:
           Type: Api
           Properties:
-            Path: /ingest
-            Method: post
-
-  ReportsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/reports.lambda_handler
-      Runtime: python3.11
-      CodeUri: ./handlers
-      Environment:
-        Variables:
-          TRANSACTIONS_TABLE: !Ref TransactionsTable
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref TransactionsTable
-      Events:
-        ScheduledEvent:
-          Type: Schedule
+            Path: /{proxy+}
+            Method: ANY
+        RootApi:
+          Type: Api
           Properties:
-            Schedule: rate(7 days)
+            Path: /
+            Method: ANY
+
+Outputs:
+  FinanceTrackerApi:
+    Description: "API Gateway endpoint URL for Finance Tracker"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  FinanceTrackerFunction:
+    Description: "Finance Tracker Lambda Function ARN"
+    Value: !GetAtt FinanceTrackerFunction.Arn

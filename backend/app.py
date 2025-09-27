@@ -8,7 +8,13 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import requests
 
-from backend.db import init_db, get_conn
+
+if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    from aws_db import init_db, add_transaction, get_transactions, get_categories
+    def get_conn():
+        return None
+else:
+    from db import init_db, get_conn
 
 load_dotenv()
 
