@@ -4,3 +4,6 @@ __pycache__/
 .env
 .DS_Store
 .aws-sam
+*.db
+backend/*.db
+finance.db

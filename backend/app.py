@@ -1,7 +1,9 @@
 import os
 import json
+import csv
+import io
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import requests
@@ -167,3 +169,91 @@ def list_recurring_transactions(user_id: str = "default"):
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
     return {"recurring_transactions": rows}
+
+@app.post("/import/csv")
+async def import_csv_transactions(
+    file: UploadFile = File(...),
+    user_id: str = "default",
+    date_format: str = "%Y-%m-%d"
+):
+    """
+    Import transactions from CSV file.
+    Expected CSV format: date,amount,description,category,tags
+    """
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+    try:
+        content = await file.read()
+        csv_content = content.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+
+        imported_count = 0
+        errors = []
+
+        for row_num, row in enumerate(csv_reader, start=2):
+            try:
+
+                date_str = row.get('date', '').strip()
+                amount = float(row.get('amount', 0))
+                description = row.get('description', '').strip()
+                category = row.get('category', 'uncategorized').strip()
+                tags = row.get('tags', '').strip()
+
+
+                try:
+                    parsed_date = datetime.strptime(date_str, date_format)
+                except ValueError:
+
+                    for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"]:
+                        try:
+                            parsed_date = datetime.strptime(date_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        raise ValueError(f"Unable to parse date: {date_str}")
+                tx_type = "income" if amount > 0 else "expense"
+
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO transactions
+                        (user_id, date, amount, category, description, type, tags, frequency)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (user_id, parsed_date.isoformat(), amount, category, description, tx_type, tags, "One-Off")
+                )
+                conn.commit()
+                conn.close()
+
+                imported_count += 1
+            
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+        return {
+            "status": "ok",
+            "imported_count": imported_count,
+            "errors": errors,
+            "message": f"Succefully imported {imported_count} transactions"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    
+@app.get("/import/template")
+def get_csv_template():
+    """Get a CSV template for importing transactions"""
+    template = "date,amount,description,category,tags\n"
+    template += "2024-01-15,-25.50,Coffe shop,Food & Dining,coffee work\n"
+    template += "2024-01-16,1200.00,Salary,Salary,Income\n"
+    template += "2024-01-17,-89.99,Groceries,Food & Dining,groceries\n"
+
+    return {
+        "template": template,
+        "format": {
+            "date": "YYYY-MM-DD format",
+            "amount": "Positive for income, negative for expenses",
+            "description": "Transaction description",
+            "category": "Category name (will be created if doesn't exist)",
+            "tags": "Comma-seperated tags (optional)"
+
+        }
+    }

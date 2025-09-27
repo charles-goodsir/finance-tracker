@@ -7,6 +7,7 @@ python-dotenv
 # Web framework (if you expose an API)
 fastapi
 uvicorn[standard]
+multipart
 
 # Database client (optional, if using DynamoDB or PostgreSQL/MySQL)
 sqlalchemy        # for SQL DBs
