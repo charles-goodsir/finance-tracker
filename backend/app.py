@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import requests
 
-from .db import init_db, get_conn
+from backend.db import init_db, get_conn
 
 load_dotenv()
 
@@ -17,11 +17,28 @@ app = FastAPI(title="Personal Finance Tracker (local)")
 
 
 class TransactionIn(BaseModel):
-    user_id: str = "defauly"
-    date: str = None
+    user_id: str = "default"
+    date: str | None = None
     amount: float
     category: str = "uncategorized"
     description: str = ""
+    type: str = "expense" 
+    tags: str = ""
+    frequency: str = "One-Off"
+    start_date: str | None = None
+    end_date: str | None = None
+
+
+class RecurringTransactionsIn(BaseModel):
+    user_id: str = "default"
+    amount: float
+    category: str = "uncategorized"
+    description: str = ""
+    frequency: str
+    type: str = "expense"
+    tags: str = ""
+    start_date: str
+    end_date: str | None = None
 
 
 def send_telegram(text: str):
@@ -84,3 +101,69 @@ def report(user_id: str = "default", days: int = 7):
         "expense": total_expense,
         "items": rows,
     }
+
+
+@app.get("/categories")
+def get_categories():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM categories ORDER BY type, name")
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return {"categories": rows}
+
+
+@app.post("/recurring-transactions")
+def add_recurring_transaction(rt: RecurringTransactionsIn):
+    from datetime import datetime, timedelta
+
+    start_date = datetime.fromisoformat(rt.start_date)
+
+    if rt.frequency == "daily":
+        next_due = start_date + timedelta(days=1)
+    elif rt.frequency == "weekly":
+        next_due = start_date + timedelta(weeks=1)
+    elif rt.frequency == "monthly":
+        next_due = start_date + timedelta(days=30)
+    elif rt.frequency == "yearly":
+        next_due = start_date + timedelta(days=365)
+    else:
+        next_due = start_date
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """INSERT INTO recurring_transactions
+        (user_id, amount, category, description, frequency, type, tags, start_date, end_date, next_due_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            rt.user_id,
+            rt.amount,
+            rt.category,
+            rt.description,
+            rt.frequency,
+            rt.type,
+            rt.tags,
+            rt.start_date,
+            rt.end_date,
+            next_due.isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok", "message": f"Added recurring {rt.frequency} transaction"}
+
+
+@app.get("/recurring-transactions")
+def list_recurring_transactions(user_id: str = "default"):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM recurring_transactions WHERE user_id = ? and is_active = 1",
+        (user_id,),
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return {"recurring_transactions": rows}
