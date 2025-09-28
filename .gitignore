@@ -7,3 +7,4 @@ __pycache__/
 *.db
 backend/*.db
 finance.db
+config.js

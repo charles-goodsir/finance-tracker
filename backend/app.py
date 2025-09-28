@@ -4,9 +4,11 @@ import csv
 import io
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import requests
+
 
 
 if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
@@ -23,6 +25,13 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 app = FastAPI(title="Personal Finance Tracker (local)")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class TransactionIn(BaseModel):
     user_id: str = "default"
@@ -104,22 +113,37 @@ def list_transactions(user_id: str = "default", limit: int = 100):
 
 @app.get("/report")
 def report(user_id: str = "default", days: int = 7):
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM transactions WHERE user_id = ? AND date >= ?", (user_id, cutoff)
-    )
-    rows = [dict(r) for r in cur.fetchall()]
-    total_income = sum(r["amount"] for r in rows if r["amount"] > 0)
-    total_expense = sum(r["amount"] for r in rows if r["amount"] < 0)
+    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        # Running on AWS - use DynamoDB
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        rows = get_transactions(user_id, limit=1000)  # Get more transactions for report
+        
+        # Filter by date
+        filtered_rows = [r for r in rows if r.get('date', '') >= cutoff]
+        
+        total_income = sum(r["amount"] for r in filtered_rows if r["amount"] > 0)
+        total_expense = sum(r["amount"] for r in filtered_rows if r["amount"] < 0)
+    else:
+        # Running locally - use SQLite
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM transactions WHERE user_id = ? AND date >= ?", (user_id, cutoff)
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        total_income = sum(r["amount"] for r in rows if r["amount"] > 0)
+        total_expense = sum(r["amount"] for r in rows if r["amount"] < 0)
+    
     return {
         "user_id": user_id,
         "days": days,
         "income": total_income,
         "expense": total_expense,
-        "items": rows,
+        "items": filtered_rows if os.getenv('AWS_LAMBDA_FUNCTION_NAME') else rows,
     }
+    
 
 
 @app.get("/categories")

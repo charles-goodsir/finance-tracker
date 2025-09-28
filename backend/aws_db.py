@@ -1,14 +1,21 @@
 import boto3
 import json
 import uuid
+import os
 from datetime import datetime
+from decimal import Decimal
 from typing import Dict, List, Optional
 
 dynamodb = boto3.resource('dynamodb')
-transactions_table = dynamodb.Table('FinanceTracker-Transactions')
-categories_table = dynamodb.Table('FinanceTracker-Categories')
-recurring_table = dynamodb.Table('FinanceTracker-Recurring')
 
+# Get table names from environment variables
+TRANSACTIONS_TABLE = os.environ.get('TRANSACTIONS_TABLE', 'FinanceTracker-Transactions')
+CATEGORIES_TABLE = os.environ.get('CATEGORIES_TABLE', 'FinanceTracker-Categories')
+RECURRING_TABLE = os.environ.get('RECURRING_TABLE', 'FinanceTracker-Recurring')
+
+transactions_table = dynamodb.Table(TRANSACTIONS_TABLE)
+categories_table = dynamodb.Table(CATEGORIES_TABLE)
+recurring_table = dynamodb.Table(RECURRING_TABLE)
 
 
 def init_db():
@@ -54,7 +61,7 @@ def add_transaction(user_id: str, amount: float, category: str, description: str
         'user_id': user_id,
         'transaction_id': transaction_id,
         'date': datetime.utcnow().isoformat(),
-        'amount': amount,
+        'amount': Decimal(str(amount)),
         'category': category,
         'description': description,
         'type': tx_type,
@@ -67,14 +74,21 @@ def add_transaction(user_id: str, amount: float, category: str, description: str
     return transaction_id
 
 def get_transactions(user_id: str, limit: int = 100) -> List[Dict]:
-    """Get transactions for user"""
+    """Get transactions for a user"""
     response = transactions_table.query(
         KeyConditionExpression='user_id = :user_id',
-        ScanIndexForward=False,
+        ScanIndexForward=False,  # Sort by date descending
         Limit=limit,
         ExpressionAttributeValues={':user_id': user_id}
     )
-    return response.get('Items', [])
+    
+    # Convert Decimal types back to float for JSON serialization
+    items = response.get('Items', [])
+    for item in items:
+        if 'amount' in item:
+            item['amount'] = float(item['amount'])
+    
+    return items
 
 def get_categories() -> List[Dict]:
     """Get all categories"""

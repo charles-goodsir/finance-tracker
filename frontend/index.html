@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finance Tracker 2.0</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1><i class="fas fa-chart-line"></i> Finance Tracker 2.0</h1>
+        <p>Enhanced Personal Finance Management</p>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-button active" onclick="showTab('dashboard')">
+          <i class="fas fa-tachometer-alt"></i> Dashboard
+        </button>
+        <button class="tab-button" onclick="showTab('transactions')">
+          <i class="fas fa-list"></i> Transactions
+        </button>
+        <button class="tab-button" onclick="showTab('add-transaction')">
+          <i class="fas fa-plus"></i> Add Transaction
+        </button>
+        <button class="tab-button" onclick="showTab('csv-import')">
+          <i class="fas fa-file-csv"></i> CSV Import
+        </button>
+        <button class="tab-button" onclick="showTab('categories')">
+          <i class="fas fa-tags"></i> Categories
+        </button>
+      </nav>
+
+      <!-- Dashboard Tab -->
+      <div id="dashboard" class="tab-content active">
+        <h2>Dashboard</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>This Week</h3>
+            <div class="stat-value" id="weekly-income">$0.00</div>
+            <div class="stat-label">Income</div>
+          </div>
+          <div class="stat-card">
+            <h3>This Week</h3>
+            <div class="stat-value" id="weekly-expense">$0.00</div>
+            <div class="stat-label">Expenses</div>
+          </div>
+          <div class="stat-card">
+            <h3>This Week</h3>
+            <div class="stat-value" id="weekly-net">$0.00</div>
+            <div class="stat-label">Net</div>
+          </div>
+        </div>
+        <button onclick="loadDashboard()" class="btn btn-primary">
+          <i class="fas fa-sync"></i> Refresh Dashboard
+        </button>
+      </div>
+
+      <!-- Transactions Tab -->
+      <div id="transactions" class="tab-content">
+        <h2>Recent Transactions</h2>
+        <div class="filters">
+          <input
+            type="text"
+            id="user-filter"
+            placeholder="User ID (default: test_user)"
+            value="test_user"
+          />
+          <input
+            type="number"
+            id="limit-filter"
+            placeholder="Limit"
+            value="20"
+          />
+          <button onclick="loadTransactions()" class="btn btn-primary">
+            <i class="fas fa-search"></i> Load Transactions
+          </button>
+        </div>
+        <div id="transactions-list" class="transactions-list"></div>
+      </div>
+
+      <!-- Add Transaction Tab -->
+      <div id="add-transaction" class="tab-content">
+        <h2>Add New Transaction</h2>
+        <form id="transaction-form" class="form">
+          <div class="form-group">
+            <label for="user-id">User ID:</label>
+            <input type="text" id="user-id" value="test_user" required />
+          </div>
+          <div class="form-group">
+            <label for="amount">Amount:</label>
+            <input type="number" id="amount" step="0.01" required />
+            <small>Positive for income, negative for expenses</small>
+          </div>
+          <div class="form-group">
+            <label for="category">Category:</label>
+            <select id="category" required>
+              <option value="">Select Category</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="description">Description:</label>
+            <input type="text" id="description" required />
+          </div>
+          <div class="form-group">
+            <label for="type">Type:</label>
+            <select id="type" required>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="tags">Tags (comma-separated):</label>
+            <input type="text" id="tags" placeholder="work, lunch, coffee" />
+          </div>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-plus"></i> Add Transaction
+          </button>
+        </form>
+      </div>
+
+      <!-- CSV Import Tab -->
+      <div id="csv-import" class="tab-content">
+        <h2>Import Transactions from CSV</h2>
+        <div class="import-section">
+          <h3>Upload CSV File</h3>
+          <form id="csv-form" class="form">
+            <div class="form-group">
+              <label for="csv-file">CSV File:</label>
+              <input type="file" id="csv-file" accept=".csv" required />
+            </div>
+            <div class="form-group">
+              <label for="csv-user-id">User ID:</label>
+              <input type="text" id="csv-user-id" value="test_user" required />
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-upload"></i> Import CSV
+            </button>
+          </form>
+        </div>
+        <div class="import-section">
+          <h3>CSV Template</h3>
+          <p>Download the template to see the required format:</p>
+          <button onclick="downloadTemplate()" class="btn btn-secondary">
+            <i class="fas fa-download"></i> Download Template
+          </button>
+          <div class="template-preview">
+            <h4>Expected Format:</h4>
+            <pre>
+date,amount,description,category,tags
+2024-01-15,-25.50,Coffee shop,Food & Dining,coffee work
+2024-01-16,1200.00,Salary,Salary,income
+2024-01-17,-89.99,Groceries,Food & Dining,groceries</pre
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Categories Tab -->
+      <div id="categories" class="tab-content">
+        <h2>Categories</h2>
+        <button onclick="loadCategories()" class="btn btn-primary">
+          <i class="fas fa-sync"></i> Load Categories
+        </button>
+        <div id="categories-list" class="categories-list"></div>
+      </div>
+
+      <!-- Status Messages -->
+      <div id="status-message" class="status-message"></div>
+    </div>
+    <script src="config.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
