@@ -62,32 +62,43 @@ def startup():
 
 
 @app.post("/transactions")
-def add_transaction(tx: TransactionIn):
-    date = tx.date or datetime.utcnow().isoformat()
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO transactions (user_id, date, amount, category, description) VALUES (?, ?, ?, ?, ?)",
-        (tx.user_id, date, tx.amount, tx.category, tx.description),
-    )
-    conn.commit()
-    conn.close()
-
-    text = f"Added transaction: {tx.user_id} {tx.amount} {tx.category} {tx.description}"
+def add_transaction_endpoint(tx: TransactionIn):
+    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        # Running on AWS - use DynamoDB
+        transaction_id = add_transaction(tx.user_id, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency)
+        text = f"Added transaction: {tx.user_id} {tx.amount} {tx.category} {tx.description}"
+    else:
+        # Running locally - use SQLite
+        date = tx.date or datetime.utcnow().isoformat()
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO transactions (user_id, date, amount, category, description) VALUES (?, ?, ?, ?, ?)",
+            (tx.user_id, date, tx.amount, tx.category, tx.description),
+        )
+        conn.commit()
+        conn.close()
+        text = f"Added transaction: {tx.user_id} {tx.amount} {tx.category} {tx.description}"
+    
     send_telegram(text)
     return {"status": "ok", "message": text}
 
 
 @app.get("/transactions")
 def list_transactions(user_id: str = "default", limit: int = 100):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC LIMIT ?",
-        (user_id, limit),
-    )
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
+    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        # Running on AWS - use DynamoDB
+        rows = get_transactions(user_id, limit)
+    else:
+        # Running locally - use SQLite
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC LIMIT ?",
+            (user_id, limit),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
     return {"items": rows}
 
 
@@ -112,12 +123,17 @@ def report(user_id: str = "default", days: int = 7):
 
 
 @app.get("/categories")
-def get_categories():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM categories ORDER BY type, name")
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
+def get_categories_endpoint():
+    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        # Running on AWS - use DynamoDB
+        rows = get_categories()
+    else:
+        # Running locally - use SQLite
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM categories ORDER BY type, name")
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
     return {"categories": rows}
 
 
