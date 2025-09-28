@@ -62,8 +62,8 @@ Resources:
   FinanceTrackerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ../
-      Handler: handlers/fastapi.handler
+      CodeUri: ../backend/
+      Handler: handler.handler
       Runtime: python3.11
       Environment:
         Variables:
