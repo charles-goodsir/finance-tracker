@@ -45,8 +45,9 @@ def init_db():
 
             )
         except:
-            pass
-def add_transaction(user_id: str, amount: float, category: str, description:  str, tx_type: str = "expense", tags: str = "", frequency: str = "One-Off"):
+            pass  # Category already exists
+
+def add_transaction(user_id: str, amount: float, category: str, description: str, tx_type: str = "expense", tags: str = "", frequency: str = "One-Off"):
     """Add a transaction to DynamoDB"""
     transaction_id = str(uuid.uuid4())
     item = {
