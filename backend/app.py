@@ -7,16 +7,27 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from backend.classifier import classify
 import requests
 
-
+try:
+    from backend.classifier import classify
+except ImportError:
+    from classifier import classify
 
 if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
-    from aws_db import init_db, add_transaction, get_transactions, get_categories
+    try:
+        from backend.aws_db import init_db, add_transaction, get_transactions, get_categories
+    except ImportError:
+        from aws_db import init_db, add_transaction, get_transactions, get_categories
+
     def get_conn():
         return None
 else:
-    from db import init_db, get_conn
+    try:
+        from backend.db import init_db, get_conn
+    except ImportError:
+        from db import init_db, get_conn
 
 load_dotenv()
 
@@ -303,3 +314,44 @@ def get_csv_template():
 
         }
     }
+@app.post("/import-csv-smart")
+def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
+    try:
+        content = file.file.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(content))
+
+
+        results = []
+        summary = {"total": 0, "auto-classified": 0, "needs_review": 0, "categories": {}}
+
+        for row in reader:
+            desc = row.get("description") or row.get("Description") or ""
+            amt = float(row.get("amount") or row.get("Amount") or 0)
+            date = row.get("date") or row.get("Date") or datetime.utcnow().isoformat()
+
+            cat, conf, reason = classify(desc, amt)
+            tx = {
+                "user_id": user_id,
+                "date": date,
+                "amount": amt,
+                "description": desc,
+                "category": cat,
+                "type": "income" if amt > 0 else "expense",
+                "frequency": "One-Off",
+                "classification": {
+                    "category": cat,
+                    "confidence": conf,
+                    "reason": reason,
+                    "needs_review": conf < 0.7
+                }
+            }
+            results.append(tx)
+            summary["total"] += 1
+            summary["categories"][cat] = summary["categories"].get(cat, 0) + 1
+            if conf < 0.7:
+                summary["needs_review"] += 1
+            else:
+                summary["auto-classified"] += 1
+        return {"status": "success", "summary": summary, "transactions": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
