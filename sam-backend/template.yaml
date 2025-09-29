@@ -2,6 +2,17 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: 'Finance Tracker 2.0 - Enhanced FastAPI Application'
 
+Parameters:
+  TelegramBotToken:
+    Type: String
+    Description: Telegram Bot Token for notifications
+    NoEcho: true
+
+  TelegramChatId:
+    Type: String
+    Description: Telegram Chat ID for notifications
+    NoEcho: true
+
 Globals:
   Function:
     Timeout: 30
@@ -88,6 +99,46 @@ Resources:
           Properties:
             Path: /
             Method: ANY
+
+  # Recurring Transaction Processor
+  RecurringProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../sam-backend/handlers/
+      Handler: recurring_processor.lambda_handler
+      Runtime: python3.11
+      Environment:
+        Variables:
+          RECURRING_TABLE: !Ref RecurringTable
+          TRANSACTIONS_TABLE: !Ref TransactionsTable
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          TELEGRAM_CHAT_ID: !Ref TelegramChatId
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecurringTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransactionsTable
+      Events:
+        # Run daily at 6 AM UTC
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 6 * * ? *)
+            Description: "Process recurring transactions daily"
+        
+        # Run weekly on Mondays at 6 AM UTC
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 6 ? * MON *)
+            Description: "Process weekly recurring transactions"
+        
+        # Run monthly on the 1st at 6 AM UTC
+        MonthlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 6 1 * ? *)
+            Description: "Process monthly recurring transactions"
 
 Outputs:
   FinanceTrackerApi:
