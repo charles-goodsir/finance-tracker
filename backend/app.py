@@ -101,6 +101,7 @@ def send_telegram(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": text})
 
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -109,7 +110,9 @@ def startup():
 @app.get("/")
 def serve_frontend():
     from fastapi.responses import FileResponse
+
     return FileResponse("frontend/index.html")
+
 
 @app.post("/transactions")
 def add_transaction_endpoint(tx: TransactionIn):
@@ -413,15 +416,26 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
         return {"status": "success", "summary": summary, "transactions": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
+
+
 @app.post("/transaction/commit-bulk")
 def commit_bulk(body: BulkCommitIn):
     saved, failed = 0, []
     try:
-        if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
             from aws_db import add_transaction as aws_add
+
             for tx in body.transactions:
                 try:
-                    aws_add(tx.user_id, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency)
+                    aws_add(
+                        tx.user_id,
+                        tx.amount,
+                        tx.category,
+                        tx.description,
+                        tx.type,
+                        tx.tags,
+                        tx.frequency,
+                    )
                     saved += 1
                 except Exception as e:
                     failed.append({"tx": tx.model_dump(), "error": str(e)})
@@ -433,15 +447,30 @@ def commit_bulk(body: BulkCommitIn):
                     date = tx.date or datetime.utcnow().isoformat()
                     cur.execute(
                         "INSERT INTO transactions (user_id, date, amount, category, description, type, tags, frequency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (tx.user_id, date, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency),
+                        (
+                            tx.user_id,
+                            date,
+                            tx.amount,
+                            tx.category,
+                            tx.description,
+                            tx.type,
+                            tx.tags,
+                            tx.frequency,
+                        ),
                     )
                     saved += 1
                 except Exception as e:
                     failed.append({"tx": tx.model_dump(), "error": str(e)})
             conn.commit()
             conn.close()
-        return {"status": "ok", "saved": saved, "failed": failed, "total": len(body.transactions)}
+        return {
+            "status": "ok",
+            "saved": saved,
+            "failed": failed,
+            "total": len(body.transactions),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bulk commit failed: {str(e)}")
+
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
