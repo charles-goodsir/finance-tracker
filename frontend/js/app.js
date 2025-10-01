@@ -209,59 +209,163 @@ function displayCategories() {
 }
 
 // CSV Import Functions
-async function handleCSVImport(event) {
+async function handleCSVImport() {
+  console.log('CSV import function called!') // Debug line
   event.preventDefault()
+  const fileInput = document.getElementById('csv-file')
+  console.log('File input:', fileInput) // Debug line
+  const file = fileInput.files[0]
+  console.log('File:', file) // Debug line
+  if (!file) {
+    showStatus('Please select a CSV file', 'error')
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('user_id', 'default')
 
   try {
-    showStatus('Importing CSV...', 'info')
+    showStatus('Processing CSV with smart classification...', 'info')
 
-    const fileInput = document.getElementById('csv-file')
-    const user_id = document.getElementById('csv-user-id').value
-
-    if (!fileInput.files[0]) {
-      showStatus('Please select a CSV file', 'error')
-      return
-    }
-
-    const formData = new FormData()
-    formData.append('file', fileInput.files[0])
-
-    const response = await fetch(
-      `${API_BASE_URL}/import/csv?user_id=${user_id}`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+    // Use the smart endpoint
+    const response = await fetch(`${API_BASE_URL}/import-csv-smart`, {
+      method: 'POST',
+      body: formData,
+    })
 
     const result = await response.json()
 
-    if (result.errors && result.errors.length > 0) {
-      showStatus(
-        `Import completed with ${result.errors.length} errors`,
-        'error'
-      )
-      console.error('Import errors:', result.errors)
+    if (result.status === 'success') {
+      showSmartImportResults(result)
     } else {
-      showStatus(
-        `Successfully imported ${result.imported_count} transactions!`,
-        'success'
-      )
+      showStatus('Error processing CSV', 'error')
     }
-
-    // Reset form
-    document.getElementById('csv-form').reset()
-    document.getElementById('csv-user-id').value = 'test_user'
   } catch (error) {
-    showStatus('Failed to import CSV', 'error')
-    console.error('CSV import error:', error)
+    console.error('Error:', error)
+    showStatus('Error uploading CSV', 'error')
   }
 }
 
+function showSmartImportResults(result) {
+  const summary = result.summary
+  const transactions = result.transactions
+
+  // Create a modal to show results
+  const modal = document.createElement('div')
+  modal.className = 'modal'
+  modal.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 1000 !important;
+  `
+
+  modal.innerHTML = `
+        <div class="modal-content" style="
+          background: white !important;
+          padding: 2rem !important;
+          border-radius: 12px !important;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+          max-width: 600px !important;
+          width: 90% !important;
+          max-height: 80vh !important;
+          overflow-y: auto !important;
+        ">
+            <h3 style="color: #2d3748 !important; margin-bottom: 1.5rem !important; font-size: 1.5rem !important; border-bottom: 2px solid #e2e8f0 !important; padding-bottom: 0.5rem !important;">Smart Classification Results</h3>
+            <div class="summary" style="background: #f7fafc !important; padding: 1rem !important; border-radius: 8px !important; margin-bottom: 1.5rem !important;">
+                <p style="margin: 0.5rem 0 !important; font-weight: 500 !important;"><strong>Total:</strong> ${summary.total}</p>
+                <p style="margin: 0.5rem 0 !important; font-weight: 500 !important;"><strong>Auto-classified:</strong> ${summary.auto_classified || 0}</p>
+                <p style="margin: 0.5rem 0 !important; font-weight: 500 !important;"><strong>Needs review:</strong> ${summary.needs_review || 0}</p>
+            </div>
+            <div class="transactions-preview" style="margin-bottom: 1.5rem !important;">
+                <h4 style="color: #4a5568 !important; margin-bottom: 1rem !important;">Preview (first 5):</h4>
+                ${transactions
+                  .slice(0, 5)
+                  .map(
+                    (tx) => `
+                    <div class="transaction-preview" style="
+                      display: flex !important;
+                      align-items: center !important;
+                      padding: 0.75rem !important;
+                      background: #f8f9fa !important;
+                      border-radius: 6px !important;
+                      margin-bottom: 0.5rem !important;
+                      border-left: 4px solid #4299e1 !important;
+                    ">
+                        <span>${tx.description}</span> → 
+                        <span class="category" style="
+                          background: #4299e1 !important;
+                          color: white !important;
+                          padding: 0.25rem 0.5rem !important;
+                          border-radius: 4px !important;
+                          font-size: 0.875rem !important;
+                          margin: 0 0.5rem !important;
+                        ">${tx.category}</span>
+                        <span class="confidence" style="
+                          color: #38a169 !important;
+                          font-weight: 600 !important;
+                          font-size: 0.875rem !important;
+                        ">(${tx.classification.confidence})</span>
+                    </div>
+                `
+                  )
+                  .join('')}
+            </div>
+            <div class="actions" style="display: flex !important; gap: 1rem !important; justify-content: flex-end !important; margin-top: 1.5rem !important;">
+                <button onclick="commitTransactions(${JSON.stringify(transactions).replace(/"/g, '&quot;')})" style="
+                  padding: 0.75rem 1.5rem !important;
+                  border: none !important;
+                  border-radius: 6px !important;
+                  font-weight: 600 !important;
+                  cursor: pointer !important;
+                  background: #48bb78 !important;
+                  color: white !important;
+                ">Commit All</button>
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" style="
+                  padding: 0.75rem 1.5rem !important;
+                  border: none !important;
+                  border-radius: 6px !important;
+                  font-weight: 600 !important;
+                  cursor: pointer !important;
+                  background: #e2e8f0 !important;
+                  color: #4a5568 !important;
+                ">Cancel</button>
+            </div>
+        </div>
+    `
+  document.body.appendChild(modal)
+}
+
+async function commitTransactions(transactions) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/transaction/commit-bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions }),
+    })
+
+    const result = await response.json()
+
+    if (result.status === 'ok') {
+      showStatus(`Successfully saved ${result.saved} transactions!`, 'success')
+      loadTransactions() // Refresh the list
+    } else {
+      showStatus('Error saving transactions', 'error')
+    }
+  } catch (error) {
+    showStatus('Error committing transactions', 'error')
+  }
+
+  // Close modal
+  document.querySelector('.modal').remove()
+}
 function downloadTemplate() {
   const template = `date,amount,description,category,tags
 2024-01-15,-25.50,Coffee shop,Food & Dining,coffee work

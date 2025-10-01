@@ -6,8 +6,12 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydantic import Field
+from typing import List
 from dotenv import load_dotenv
 from backend.classifier import classify
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import requests
 
 try:
@@ -15,14 +19,20 @@ try:
 except ImportError:
     from classifier import classify
 
-if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
     try:
-        from backend.aws_db import init_db, add_transaction, get_transactions, get_categories
+        from backend.aws_db import (
+            init_db,
+            add_transaction,
+            get_transactions,
+            get_categories,
+        )
     except ImportError:
         from aws_db import init_db, add_transaction, get_transactions, get_categories
 
     def get_conn():
         return None
+
 else:
     try:
         from backend.db import init_db, get_conn
@@ -44,13 +54,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class TransactionIn(BaseModel):
     user_id: str = "default"
     date: str | None = None
     amount: float
     category: str = "uncategorized"
     description: str = ""
-    type: str = "expense" 
+    type: str = "expense"
     tags: str = ""
     frequency: str = "One-Off"
     start_date: str | None = None
@@ -69,23 +80,50 @@ class RecurringTransactionsIn(BaseModel):
     end_date: str | None = None
 
 
+class ClassifiedTx(BaseModel):
+    user_id: str = "default"
+    date: str
+    amount: float
+    category: str
+    description: str = ""
+    type: str = Field(default="expense")  # "income" | "expense"
+    tags: str = ""
+    frequency: str = "One-Off"
+
+
+class BulkCommitIn(BaseModel):
+    transactions: List[ClassifiedTx]
+
+
 def send_telegram(text: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": text})
 
-
 @app.on_event("startup")
 def startup():
     init_db()
 
 
+@app.get("/")
+def serve_frontend():
+    from fastapi.responses import FileResponse
+    return FileResponse("frontend/index.html")
+
 @app.post("/transactions")
 def add_transaction_endpoint(tx: TransactionIn):
-    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         # Running on AWS - use DynamoDB
-        transaction_id = add_transaction(tx.user_id, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency)
+        transaction_id = add_transaction(
+            tx.user_id,
+            tx.amount,
+            tx.category,
+            tx.description,
+            tx.type,
+            tx.tags,
+            tx.frequency,
+        )
         text = f"Added transaction: {tx.user_id} {tx.amount} {tx.category} {tx.description}"
     else:
         # Running locally - use SQLite
@@ -99,14 +137,14 @@ def add_transaction_endpoint(tx: TransactionIn):
         conn.commit()
         conn.close()
         text = f"Added transaction: {tx.user_id} {tx.amount} {tx.category} {tx.description}"
-    
+
     send_telegram(text)
     return {"status": "ok", "message": text}
 
 
 @app.get("/transactions")
 def list_transactions(user_id: str = "default", limit: int = 100):
-    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         # Running on AWS - use DynamoDB
         rows = get_transactions(user_id, limit)
     else:
@@ -124,14 +162,14 @@ def list_transactions(user_id: str = "default", limit: int = 100):
 
 @app.get("/report")
 def report(user_id: str = "default", days: int = 7):
-    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         # Running on AWS - use DynamoDB
         cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
         rows = get_transactions(user_id, limit=1000)  # Get more transactions for report
-        
+
         # Filter by date
-        filtered_rows = [r for r in rows if r.get('date', '') >= cutoff]
-        
+        filtered_rows = [r for r in rows if r.get("date", "") >= cutoff]
+
         total_income = sum(r["amount"] for r in filtered_rows if r["amount"] > 0)
         total_expense = sum(r["amount"] for r in filtered_rows if r["amount"] < 0)
     else:
@@ -140,26 +178,26 @@ def report(user_id: str = "default", days: int = 7):
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            "SELECT * FROM transactions WHERE user_id = ? AND date >= ?", (user_id, cutoff)
+            "SELECT * FROM transactions WHERE user_id = ? AND date >= ?",
+            (user_id, cutoff),
         )
         rows = [dict(r) for r in cur.fetchall()]
         conn.close()
         total_income = sum(r["amount"] for r in rows if r["amount"] > 0)
         total_expense = sum(r["amount"] for r in rows if r["amount"] < 0)
-    
+
     return {
         "user_id": user_id,
         "days": days,
         "income": total_income,
         "expense": total_expense,
-        "items": filtered_rows if os.getenv('AWS_LAMBDA_FUNCTION_NAME') else rows,
+        "items": filtered_rows if os.getenv("AWS_LAMBDA_FUNCTION_NAME") else rows,
     }
-    
 
 
 @app.get("/categories")
 def get_categories_endpoint():
-    if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         # Running on AWS - use DynamoDB
         rows = get_categories()
     else:
@@ -227,21 +265,22 @@ def list_recurring_transactions(user_id: str = "default"):
     conn.close()
     return {"recurring_transactions": rows}
 
+
 @app.post("/import/csv")
 async def import_csv_transactions(
     file: UploadFile = File(...),
     user_id: str = "default",
-    date_format: str = "%Y-%m-%d"
+    date_format: str = "%Y-%m-%d",
 ):
     """
     Import transactions from CSV file.
     Expected CSV format: date,amount,description,category,tags
     """
-    if not file.filename.endswith('.csv'):
+    if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
     try:
         content = await file.read()
-        csv_content = content.decode('utf-8')
+        csv_content = content.decode("utf-8")
         csv_reader = csv.DictReader(io.StringIO(csv_content))
 
         imported_count = 0
@@ -250,18 +289,22 @@ async def import_csv_transactions(
         for row_num, row in enumerate(csv_reader, start=2):
             try:
 
-                date_str = row.get('date', '').strip()
-                amount = float(row.get('amount', 0))
-                description = row.get('description', '').strip()
-                category = row.get('category', 'uncategorized').strip()
-                tags = row.get('tags', '').strip()
-
+                date_str = row.get("date", "").strip()
+                amount = float(row.get("amount", 0))
+                description = row.get("description", "").strip()
+                category = row.get("category", "uncategorized").strip()
+                tags = row.get("tags", "").strip()
 
                 try:
                     parsed_date = datetime.strptime(date_str, date_format)
                 except ValueError:
 
-                    for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"]:
+                    for fmt in [
+                        "%Y-%m-%d",
+                        "%m/%d/%Y",
+                        "%d/%m/%Y",
+                        "%Y-%m-%d %H:%M:%S",
+                    ]:
                         try:
                             parsed_date = datetime.strptime(date_str, fmt)
                             break
@@ -277,24 +320,34 @@ async def import_csv_transactions(
                     """INSERT INTO transactions
                         (user_id, date, amount, category, description, type, tags, frequency)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (user_id, parsed_date.isoformat(), amount, category, description, tx_type, tags, "One-Off")
+                    (
+                        user_id,
+                        parsed_date.isoformat(),
+                        amount,
+                        category,
+                        description,
+                        tx_type,
+                        tags,
+                        "One-Off",
+                    ),
                 )
                 conn.commit()
                 conn.close()
 
                 imported_count += 1
-            
+
             except Exception as e:
                 errors.append(f"Row {row_num}: {str(e)}")
         return {
             "status": "ok",
             "imported_count": imported_count,
             "errors": errors,
-            "message": f"Succefully imported {imported_count} transactions"
+            "message": f"Succefully imported {imported_count} transactions",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
-    
+
+
 @app.get("/import/template")
 def get_csv_template():
     """Get a CSV template for importing transactions"""
@@ -310,19 +363,24 @@ def get_csv_template():
             "amount": "Positive for income, negative for expenses",
             "description": "Transaction description",
             "category": "Category name (will be created if doesn't exist)",
-            "tags": "Comma-seperated tags (optional)"
-
-        }
+            "tags": "Comma-seperated tags (optional)",
+        },
     }
+
+
 @app.post("/import-csv-smart")
 def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
     try:
         content = file.file.read().decode("utf-8")
         reader = csv.DictReader(io.StringIO(content))
 
-
         results = []
-        summary = {"total": 0, "auto-classified": 0, "needs_review": 0, "categories": {}}
+        summary = {
+            "total": 0,
+            "auto-classified": 0,
+            "needs_review": 0,
+            "categories": {},
+        }
 
         for row in reader:
             desc = row.get("description") or row.get("Description") or ""
@@ -342,8 +400,8 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
                     "category": cat,
                     "confidence": conf,
                     "reason": reason,
-                    "needs_review": conf < 0.7
-                }
+                    "needs_review": conf < 0.7,
+                },
             }
             results.append(tx)
             summary["total"] += 1
@@ -355,3 +413,35 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
         return {"status": "success", "summary": summary, "transactions": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
+@app.post("/transaction/commit-bulk")
+def commit_bulk(body: BulkCommitIn):
+    saved, failed = 0, []
+    try:
+        if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+            from aws_db import add_transaction as aws_add
+            for tx in body.transactions:
+                try:
+                    aws_add(tx.user_id, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency)
+                    saved += 1
+                except Exception as e:
+                    failed.append({"tx": tx.model_dump(), "error": str(e)})
+        else:
+            conn = get_conn()
+            cur = conn.cursor()
+            for tx in body.transactions:
+                try:
+                    date = tx.date or datetime.utcnow().isoformat()
+                    cur.execute(
+                        "INSERT INTO transactions (user_id, date, amount, category, description, type, tags, frequency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (tx.user_id, date, tx.amount, tx.category, tx.description, tx.type, tx.tags, tx.frequency),
+                    )
+                    saved += 1
+                except Exception as e:
+                    failed.append({"tx": tx.model_dump(), "error": str(e)})
+            conn.commit()
+            conn.close()
+        return {"status": "ok", "saved": saved, "failed": failed, "total": len(body.transactions)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Bulk commit failed: {str(e)}")
+
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
