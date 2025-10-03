@@ -418,6 +418,80 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
         raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
 
 
+@app.post("/import-bank-csv")
+def import_bank_csv(file: UploadFile = File(...), user_id: str = "defauly"):
+    """
+    Import transactions from bank CSV format.
+    Expected CSV format: Process Date,Amount,Other Party,Credit Plan Name,Transaction Date,Foreign Details,City,Country Code
+    """
+    try:
+        content = file.file.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(content))
+
+        results = []
+        summary = {
+            "total": 0,
+            "auto-classified": 0,
+            "needs_review": 0,
+            "categories": {},
+        }
+
+        for row in reader:
+
+            other_party = row.get("Other Party", "").strip()
+            amount_str = row.get("Amount", "0").strip()
+            transaction_date = row.get("Transaction Date", "").strip()
+
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                continue
+
+            try:
+                parsed_date = datetime.strptime(transaction_date, "%d/%m/%Y")
+                date_iso = parsed_date.isoformat()
+            except ValueError:
+
+                for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                    try:
+                        parsed_date = datetime.strptime(transaction_date, fmt)
+                        date_iso = parsed_date.isoformat()
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    date_iso = datetime.utcnow().isoformat()
+            cat, conf, reason = classify(other_party, amount)
+
+            tx = {
+                "user_id": user_id,
+                "date": date_iso,
+                "amount": amount,
+                "description": other_party,
+                "category": cat,
+                "type": "income" if amount > 0 else "expense",
+                "frequency": "One-Off",
+                "classification": {
+                    "category": cat,
+                    "confidence": conf,
+                    "reason": reason,
+                    "needs_review": conf < 0.7,
+                },
+            }
+            results.append(tx)
+            summary["total"] += 1
+            summary["categories"][cat] = summary["categories"].get(cat, 0) + 1
+            if conf < 0.7:
+                summary["needs_review"] += 1
+            else:
+                summary["auto-classified"] += 1
+        return {"status": "success", "summary": summary, "transactions": results}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error processing bank CSV: {str(e)}"
+        )
+
+
 @app.post("/transaction/commit-bulk")
 def commit_bulk(body: BulkCommitIn):
     saved, failed = 0, []

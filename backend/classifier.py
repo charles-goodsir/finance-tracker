@@ -4,12 +4,47 @@ classification_rules = {
         "pak'nsave",
         "new world",
         "countdown",
+        "woolworths",
+        "four square",
         "iga",
         "supervalue",
         "supermarket",
         "groceries",
     ],
-    "Transportation": ["uber", "taxi", "bp", "shell", "caltex", "fuel", "petrol"],
+    "Transportation": [
+        "uber",
+        "taxi",
+        "bp",
+        "shell",
+        "caltex",
+        "fuel",
+        "petrol",
+        "wilson parking",
+        "parking",
+    ],
+    "Food Delivery": [
+        "uber* eats",
+        "uber eats",
+        "menulog",
+        "delivereasy",
+        "doordash",
+    ],
+    "Dining Out": [
+        "restaurant",
+        "cafe",
+        "bakery",
+        "korean night market",
+        "coffee",
+        "pizza",
+        "burger",
+        "kfc",
+        "mcdonalds",
+        "subway",
+        "krispy kreme",
+        "o'dowd",
+        "hoppers",
+        "3 tigers",
+    ],
     "Bills & Utilities": [
         "electricity",
         "gas",
@@ -19,26 +54,82 @@ classification_rules = {
         "optus",
         "vodafone",
     ],
-    "Entertainment": ["netflix", "spotify", "disney", "cinema", "f1"],
-    "Dining Out": [
-        "restaurant",
-        "cafe",
-        "coffee",
-        "pizza",
-        "burger",
-        "kfc",
-        "mcdonalds",
-        "subway",
+    "Insurance": [
+        "insurance",
+        "state insurance",
     ],
-    "Shopping": ["amazon", "ebay", "store", "retail"],
-    "Health & Medical": ["pharmacy", "chemist", "medical", "doctor", "hospital"],
-    "Income": ["salary", "wage", "pay", "deposit", "refund"],
-    "Transfers": ["transfer", "atm", "withdrawal"],
+    "Travel": [
+        "air new z",
+        "air nz",
+        "flight",
+        "hotel",
+        "accommodation",
+        "audiologytouring",
+    ],
+    "Entertainment": [
+        "netflix",
+        "spotify",
+        "disney",
+        "hoyts",
+        "cinema",
+        "f1",
+        "www.f1.com",
+        "event tickets",
+        "concert",
+    ],
+    "Subscriptions": [
+        "apple.com/bill",
+        "apple com bill",
+        "cursor",
+        "ableton",
+        "adobe",
+        "subscription",
+    ],
+    "Shopping": [
+        "amazon",
+        "ebay",
+        "etsy",
+        "temu",
+        "lego",
+        "the warehouse",
+        "store",
+        "retail",
+    ],
+    "Personal Care": [
+        "vape",
+        "pharmacy",
+        "chemist",
+    ],
+    "Health & Medical": [
+        "medical",
+        "doctor",
+        "hospital",
+    ],
+    "Income": [
+        "salary",
+        "wage",
+        "pay",
+        "deposit",
+        "refund",
+        "payment received",
+        "thank you",
+    ],
+    "Transfers": [
+        "transfer",
+        "atm",
+        "withdrawal",
+    ],
 }
 
 
 def classify(description: str, amount: float):
+    """
+    Classify a transaction based on its description and amount.
+    Returns: (Category, confidence, reason)
+    """
+
     desc = (description or "").lower()
+
     for cat, kws in classification_rules.items():
         for kw in kws:
             if kw in desc:

@@ -8,3 +8,8 @@ __pycache__/
 backend/*.db
 finance.db
 config.js
+build/
+dist/
+*.csv
+*.db-shm
+*.db-wal
