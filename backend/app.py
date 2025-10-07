@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from pydantic import Field
 from typing import List
 from dotenv import load_dotenv
-from backend.classifier import classify
+try:
+    from backend.classifier import classify
+except ImportError:
+    from classifier import classify
+
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import requests

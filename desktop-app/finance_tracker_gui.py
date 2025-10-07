@@ -71,7 +71,7 @@ class FinanceTrackerGUI:
 
     def load_transactions(self):
         """Load from local cache first, then sync with AWS"""
-        
+
         try:
 
             local_transactions = self.get_local_transactions()
@@ -188,30 +188,42 @@ class FinanceTrackerGUI:
 
     def _upload_local_changes(self):
         """Upload unsynced local transactions to AWS"""
-        cursor = self.local_conn.cursor()
-        cursor.execute("SELECT * FROM transactions WHERE synced = 0")
+        try:
+            cursor = self.local_conn.cursor()
+            cursor.execute("SELECT * FROM transactions WHERE synced = 0")
 
-        unsynced = cursor.fetchall()
-        if unsynced:
-            transactions = []
-            for row in unsynced:
-                transactions.append(
-                    {
-                        "date": row[1],
-                        "amount": row[2],
-                        "description": row[3],
-                        "category": row[4],
-                        "type": row[5],
-                    }
+            unsynced = cursor.fetchall()
+            if unsynced:
+                transactions = []
+                for row in unsynced:
+                    transactions.append(
+                        {
+                            "date": row[1],
+                            "amount": row[2],
+                            "description": row[3],
+                            "category": row[4],
+                            "type": row[5],
+                        }
+                    )
+                
+                # Add timeout and error handling
+                response = requests.post(
+                    f"{self.aws_api_url}/transactions/commit-bulk",
+                    json={"transactions": transactions},
+                    timeout=30
                 )
-            response = requests.post(
-                f"{self.aws_api_url}/transactions/commit-bulk",
-                json={"transactions": transactions},
-            )
 
-            if response.status_code == 200:
-                cursor.execute("UPDATE transactions SET synced = 1")
-                self.local_conn.commit()
+                if response.status_code == 200:
+                    cursor.execute("UPDATE transactions SET synced = 1")
+                    self.local_conn.commit()
+                    print(f"✅ Uploaded {len(transactions)} transactions to AWS")
+                else:
+                    print(f"❌ Upload failed: {response.status_code}")
+                    
+        except requests.exceptions.Timeout:
+            print("⏰ Upload timeout - will retry later")
+        except Exception as e:
+            print(f"❌ Upload error: {e}")
 
     def create_widgets(self):
         print("Creating notebook...")
