@@ -563,6 +563,10 @@ def commit_bulk(body: BulkCommitIn):
                     failed.append({"tx": tx.model_dump(), "error": str(e)})
             conn.commit()
             conn.close()
+
+        if saved > 0:
+          send_telegram(f"💰 Bulk commit: {saved} transactions saved successfully!")
+        
         return {
             "status": "ok",
             "saved": saved,

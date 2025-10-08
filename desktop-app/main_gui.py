@@ -1,14 +1,22 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+import sys
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtGui import QFont, QPalette, QColor
 from database import DatabaseManager
 from api_client import APIClient
+from modules.dashboard import DashboardModule
+from modules.transactions import TransactionsModule
+from modules.csv_import import CSVImportModule
+from modules.accounts import AccountsModule
+from modules.goals import GoalsModule
+from modules.insights import InsightsModule
 
 
-class FinanceTrackerGUI:
+class FinanceTrackerGUI(QMainWindow):
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Finance Tracker 2.0")
-        self.root.geometry("1000x700")
+        super().__init__()
+        self.setWindowTitle("Finance Tracker 2.0 - Fast")
+        self.setGeometry(100, 100, 1200, 800)
 
         # Initialize modules
         self.db = DatabaseManager(
@@ -18,211 +26,75 @@ class FinanceTrackerGUI:
             "https://35kdl5sqm4.execute-api.ap-southeast-2.amazonaws.com/Prod"
         )
 
+        # Create UI
         self.create_widgets()
-        self.setup_database()
+
+        # Setup database in background
+        self.db.setup_database()
 
     def create_widgets(self):
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        # Central widget with tabs
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
 
         # Dashboard tab
-        self.dashboard_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.dashboard_frame, text="Dashboard")
-        self.setup_dashboard()
+        self.dashboard_widget = QWidget()
+        self.tab_widget.addTab(self.dashboard_widget, "📊 Dashboard")
+        self.dashboard_module = DashboardModule(self.dashboard_widget, self.db)
 
         # Transactions tab
-        self.transactions_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.transactions_frame, text="Transactions")
-        self.setup_transactions()
+        self.transactions_widget = QWidget()
+        self.tab_widget.addTab(self.transactions_widget, "💳 Transactions")
+        self.transactions_module = TransactionsModule(self.transactions_widget, self.db)
 
         # CSV Import tab
-        self.csv_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.csv_frame, text="CSV Import")
-        self.setup_csv_import()
+        self.csv_widget = QWidget()
+        self.tab_widget.addTab(self.csv_widget, "📁 CSV Import")
+        self.csv_import_module = CSVImportModule(self.csv_widget, self.api, self.db)
 
-    def setup_dashboard(self):
-        ttk.Label(
-            self.dashboard_frame, text="Finance Dashboard", font=("Arial", 16, "bold")
-        ).pack(pady=10)
+        # Accounts tab
+        self.accounts_widget = QWidget()
+        self.tab_widget.addTab(self.accounts_widget, "🏦 Accounts")
+        self.accounts_module = AccountsModule(self.accounts_widget)
 
-        summary_frame = ttk.LabelFrame(self.dashboard_frame, text="This Week")
-        summary_frame.pack(fill="x", padx=10, pady=5)
+        # Goals tab
+        self.goals_widget = QWidget()
+        self.tab_widget.addTab(self.goals_widget, "🎯 Goals")
+        self.goals_module = GoalsModule(self.goals_widget)
 
-        self.income_label = ttk.Label(summary_frame, text="Income: $0.00")
-        self.income_label.pack(pady=5)
+        # Insights tab
+        self.insights_widget = QWidget()
+        self.tab_widget.addTab(self.insights_widget, "💰 Insights")
+        self.insights_module = InsightsModule(self.insights_widget)
 
-        self.expense_label = ttk.Label(summary_frame, text="Expenses: $0.00")
-        self.expense_label.pack(pady=5)
+        # Connect modules for data sharing
+        self.connect_modules()
 
-        self.net_label = ttk.Label(summary_frame, text="Net: $0.00")
-        self.net_label.pack(pady=5)
+    def connect_modules(self):
+        """Connect modules so they can share data"""
+        # When transactions are loaded, refresh dashboard
+        if hasattr(self.transactions_module, "load_transactions"):
+            # Connect transaction loading to dashboard refresh
+            pass
 
-        ttk.Button(
-            summary_frame, text="Refresh Dashboard", command=self.refresh_dashboard
-        ).pack(pady=10)
+        # When CSV is imported, refresh other modules
+        if hasattr(self.csv_import_module, "on_import_complete"):
+            # Connect CSV import completion to other modules
+            pass
 
-    def setup_transactions(self):
-        ttk.Label(
-            self.transactions_frame,
-            text="Recent Transactions",
-            font=("Arial", 14, "bold"),
-        ).pack(pady=10)
 
-        columns = ("Date", "Description", "Amount", "Category", "Type")
-        self.transactions_tree = ttk.Treeview(
-            self.transactions_frame, columns=columns, show="headings"
-        )
+def main():
+    app = QApplication(sys.argv)
 
-        for col in columns:
-            self.transactions_tree.heading(col, text=col)
-            self.transactions_tree.column(col, width=120)
+    # Set application style for better macOS integration
+    app.setStyle("Fusion")
 
-        self.transactions_tree.pack(fill="both", expand=True, padx=10, pady=5)
+    # Create and show main window
+    window = FinanceTrackerGUI()
+    window.show()
 
-        ttk.Button(
-            self.transactions_frame,
-            text="Load Transactions",
-            command=self.load_transactions,
-        ).pack(pady=10)
-
-        self.sync_status_label = ttk.Label(
-            self.transactions_frame, text="Ready", foreground="green"
-        )
-        self.sync_status_label.pack(pady=5)
-
-    def setup_csv_import(self):
-        ttk.Label(
-            self.csv_frame, text="Smart CSV Import", font=("Arial", 14, "bold")
-        ).pack(pady=10)
-
-        file_frame = ttk.Frame(self.csv_frame)
-        file_frame.pack(fill="x", padx=10, pady=5)
-
-        ttk.Label(file_frame, text="CSV File").pack(side="left")
-        self.file_path_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.file_path_var, width=50).pack(
-            side="left", padx=5
-        )
-        ttk.Button(file_frame, text="Browse", command=self.browse_file).pack(
-            side="left"
-        )
-
-        self.import_button = ttk.Button(
-            self.csv_frame,
-            text="Import with Smart Classification",
-            command=self.import_csv,
-        )
-        self.import_button.pack(pady=20)
-
-        self.results_text = tk.Text(self.csv_frame, height=15, width=80)
-        self.results_text.pack(fill="both", expand=True, padx=10, pady=5)
-
-    def setup_database(self):
-        if self.db.setup_database():
-            self.sync_status_label.config(text="Database Ready", foreground="green")
-        else:
-            self.sync_status_label.config(text="Database Error", foreground="red")
-
-    def browse_file(self):
-        filename = filedialog.askopenfilename(
-            title="Select CSV file",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-        )
-        if filename:
-            self.file_path_var.set(filename)
-            self.sync_status_label.config(text="File selected", foreground="green")
-
-    def import_csv(self):
-        file_path = self.file_path_var.get()
-        if not file_path:
-            messagebox.showerror("Error", "Please select a file")
-            return
-
-        self.import_button.config(state="disabled")
-        self.sync_status_label.config(text="Uploading...", foreground="blue")
-
-        self.api.import_csv(file_path, self.on_import_complete)
-
-    def on_import_complete(self, success, result):
-        if success:
-            self.show_import_results(result)
-        else:
-            messagebox.showerror("Error", result)
-
-        self.import_button.config(state="normal")
-        self.sync_status_label.config(text="Ready", foreground="green")
-
-    def show_import_results(self, result):
-        self.results_text.delete(1.0, tk.END)
-
-        summary = result["summary"]
-        self.results_text.insert(tk.END, f"Import Results:\n")
-        self.results_text.insert(tk.END, f"Total: {summary['total']}\n")
-        self.results_text.insert(
-            tk.END, f"Auto-classified: {summary['auto-classified']}\n"
-        )
-        self.results_text.insert(tk.END, f"Needs Review: {summary['needs_review']}\n\n")
-
-        self.results_text.insert(tk.END, "Transactions:\n")
-        for tx in result["transactions"]:
-            self.results_text.insert(
-                tk.END, f"{tx['description']} → {tx['category']} (${tx['amount']})\n"
-            )
-
-        self.pending_transactions = result["transactions"]
-
-        if not hasattr(self, "commit_button"):
-            self.commit_button = ttk.Button(
-                self.csv_frame,
-                text="Commit Transactions",
-                command=self.commit_transactions,
-            )
-            self.commit_button.pack(pady=10)
-
-    def commit_transactions(self):
-        if hasattr(self, "pending_transactions"):
-            self.api.commit_transactions(
-                self.pending_transactions, self.on_commit_complete
-            )
-
-    def on_commit_complete(self, success, result):
-        if success:
-            messagebox.showinfo("Success", f"Committed {result['saved']} transactions!")
-            self.db.save_transactions(self.pending_transactions)
-            if hasattr(self, "commit_button"):
-                self.commit_button.pack_forget()
-        else:
-            messagebox.showerror("Error", result)
-
-    def load_transactions(self):
-        transactions = self.db.get_local_transactions()
-        self.display_transactions(transactions)
-
-    def display_transactions(self, transactions):
-        for item in self.transactions_tree.get_children():
-            self.transactions_tree.delete(item)
-
-        for tx in transactions:
-            self.transactions_tree.insert(
-                "",
-                "end",
-                values=(
-                    tx["date"],
-                    tx["description"],
-                    f"${tx['amount']:.2f}",
-                    tx["category"],
-                    tx["type"],
-                ),
-            )
-
-    def refresh_dashboard(self):
-        self.load_transactions()
-
-    def run(self):
-        self.root.mainloop()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    app = FinanceTrackerGUI()
-    app.run()
+    main()
