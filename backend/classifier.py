@@ -1,139 +1,68 @@
 classification_rules = {
+  "Credit Card Payments": [
+        "payment received", "credit card payment", "credit card bill", 
+        "card payment", "payment to card"
+    ],
     "Groceries": [
-        "pak n save",
-        "pak'nsave",
-        "new world",
-        "countdown",
-        "woolworths",
-        "four square",
-        "iga",
-        "supervalue",
-        "supermarket",
-        "groceries",
+        "woolworths", "pak n save", "new world", "countdown", "four square", 
+        "supermarket", "groceries", "foodstuffs"
     ],
     "Transportation": [
-        "uber",
-        "taxi",
-        "bp",
-        "shell",
-        "caltex",
-        "fuel",
-        "petrol",
-        "wilson parking",
-        "parking",
-    ],
-    "Food Delivery": [
-        "uber* eats",
-        "uber eats",
-        "menulog",
-        "delivereasy",
-        "doordash",
+        "uber", "taxi", "bus", "train", "parking", "wilson parking", 
+        "fuel", "gas station", "z energy", "bp", "mobil"
     ],
     "Dining Out": [
-        "restaurant",
-        "cafe",
-        "bakery",
-        "korean night market",
-        "coffee",
-        "pizza",
-        "burger",
-        "kfc",
-        "mcdonalds",
-        "subway",
-        "krispy kreme",
-        "o'dowd",
-        "hoppers",
-        "3 tigers",
-    ],
-    "Bills & Utilities": [
-        "electricity",
-        "gas",
-        "water",
-        "internet",
-        "telstra",
-        "optus",
-        "vodafone",
-    ],
-    "Insurance": [
-        "insurance",
-        "state insurance",
-    ],
-    "Travel": [
-        "air new z",
-        "air nz",
-        "flight",
-        "hotel",
-        "accommodation",
-        "audiologytouring",
-    ],
-    "Entertainment": [
-        "netflix",
-        "spotify",
-        "disney",
-        "hoyts",
-        "cinema",
-        "f1",
-        "www.f1.com",
-        "event tickets",
-        "concert",
-    ],
-    "Subscriptions": [
-        "apple.com/bill",
-        "apple com bill",
-        "cursor",
-        "ableton",
-        "adobe",
-        "subscription",
-    ],
-    "Shopping": [
-        "amazon",
-        "ebay",
-        "etsy",
-        "temu",
-        "lego",
-        "the warehouse",
-        "store",
-        "retail",
-    ],
-    "Personal Care": [
-        "vape",
-        "pharmacy",
-        "chemist",
-    ],
-    "Health & Medical": [
-        "medical",
-        "doctor",
-        "hospital",
+        "coffee", "cafe", "restaurant", "mcdonalds", "kfc", "subway", 
+        "krispy kreme", "bakery", "korean night market", "3 tigers"
     ],
     "Income": [
-        "salary",
-        "wage",
-        "pay",
-        "deposit",
-        "refund",
-        "payment received",
-        "thank you",
+        "salary", "wage", "income", "deposit", "refund", "interest", "datacom systems"
+        # REMOVED "payment received" - this is credit card payment, not income
     ],
-    "Transfers": [
-        "transfer",
-        "atm",
-        "withdrawal",
+    
+    "Bills & Utilities": [
+        "apple.com", "netflix", "spotify", "amazon", "cursor", "ableton"
     ],
+    "Shopping": [
+        "the warehouse", "kmart", "bunnings", "mitre 10", "pb tech", 
+        "temu", "etsy", "lego"
+    ],
+    "Entertainment": [
+        "hoyts", "movie", "cinema", "f1.com", "sports", "gym"
+    ],
+    "Healthcare": [
+        "pharmacy", "chemist", "doctor", "dentist", "medical", "vape"
+    ],
+    "Insurance": [
+        "state insurance", "insurance", "cover"
+    ],
+    "Travel": [
+        "air new zealand", "air new z", "flight", "travel"
+    ]
 }
 
-
-def classify(description: str, amount: float):
+def classify(description, amount):
     """
-    Classify a transaction based on its description and amount.
-    Returns: (Category, confidence, reason)
+    Classify a transaction based on description and amount.
+    Returns: (category, confidence, reason)
     """
-
-    desc = (description or "").lower()
-
-    for cat, kws in classification_rules.items():
-        for kw in kws:
-            if kw in desc:
-                return (cat, 0.9, f"Matched: {kw}")
+    description_lower = description.lower().strip()
+    
+    # Special case for credit card payments - check this FIRST
+    if "payment received" in description_lower:
+        return "Credit Card Payments", 0.9, "Credit card payment detected"
+    
+    # Check each category for matches
+    for category, keywords in classification_rules.items():
+        for keyword in keywords:
+            if keyword.lower() in description_lower:
+                # Calculate confidence based on keyword match
+                confidence = 0.8 if keyword.lower() in description_lower else 0.6
+                reason = f"Matched keyword: {keyword}"
+                return category, confidence, reason
+    
+    # Default classification
     if amount > 0:
-        return ("Incom", 0.7, "Positive amount")
-    return ("Uncategorized", 0.0, "No match")
+        return "Income", 0.3, "Positive amount, no specific match"
+    else:
+        return "Uncategorized", 0.1, "No matching keywords found"

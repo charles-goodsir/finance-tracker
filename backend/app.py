@@ -114,8 +114,22 @@ def startup():
 @app.get("/")
 def serve_frontend():
     from fastapi.responses import FileResponse
-
-    return FileResponse("frontend/index.html")
+    
+    # Only serve frontend if it exists (for local development)
+    if os.path.exists("frontend/index.html"):
+        return FileResponse("frontend/index.html")
+    else:
+        # Return API info for AWS deployment
+        return {
+            "message": "Finance Tracker 2.0 API",
+            "version": "2.0.0",
+            "endpoints": {
+                "transactions": "/transactions",
+                "categories": "/categories", 
+                "report": "/report",
+                "csv_import": "/import-csv-smart"
+            }
+        }
 
 
 @app.post("/transactions")
@@ -390,9 +404,9 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
         }
 
         for row in reader:
-            desc = row.get("description") or row.get("Description") or ""
-            amt = float(row.get("amount") or row.get("Amount") or 0)
-            date = row.get("date") or row.get("Date") or datetime.utcnow().isoformat()
+            desc = row.get("Other Party") or row.get("description") or row.get("Description") or ""
+            amt = float(row.get("Amount") or row.get("amount") or 0)
+            date = row.get("Transaction Date") or row.get("date") or row.get("Date") or datetime.utcnow().isoformat()
 
             cat, conf, reason = classify(desc, amt)
             tx = {
@@ -467,13 +481,21 @@ def import_bank_csv(file: UploadFile = File(...), user_id: str = "defauly"):
                     date_iso = datetime.utcnow().isoformat()
             cat, conf, reason = classify(other_party, amount)
 
+            if "payment received" in other_party.lower():
+                tx_type = "transfer"
+            elif amount > 0:
+                tx_type = "income"
+            else:
+                tx_type = "expense"
+            
+
             tx = {
                 "user_id": user_id,
                 "date": date_iso,
                 "amount": amount,
                 "description": other_party,
                 "category": cat,
-                "type": "income" if amount > 0 else "expense",
+                "type": tx_type,
                 "frequency": "One-Off",
                 "classification": {
                     "category": cat,
@@ -551,4 +573,6 @@ def commit_bulk(body: BulkCommitIn):
         raise HTTPException(status_code=500, detail=f"Bulk commit failed: {str(e)}")
 
 
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# Only mount static files if frontend directory exists (for local development)
+if os.path.exists("frontend"):
+    app.mount("/static", StaticFiles(directory="frontend"), name="static")
