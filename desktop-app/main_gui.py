@@ -61,7 +61,7 @@ class FinanceTrackerGUI(QMainWindow):
         # Dashboard tab
         self.dashboard_widget = QWidget()
         self.tab_widget.addTab(self.dashboard_widget, "📊 Dashboard")
-        self.dashboard_module = DashboardModule(self.dashboard_widget, self.db)
+        self.dashboard_module = DashboardModule(self.dashboard_widget, self.db, self.api)
 
         # Transactions tab
         self.transactions_widget = QWidget()
@@ -76,17 +76,19 @@ class FinanceTrackerGUI(QMainWindow):
         # Accounts tab
         self.accounts_widget = QWidget()
         self.tab_widget.addTab(self.accounts_widget, "🏦 Accounts")
-        self.accounts_module = AccountsModule(self.accounts_widget)
+        self.accounts_module = AccountsModule(self.accounts_widget, self.api)
 
         # Goals tab
         self.goals_widget = QWidget()
         self.tab_widget.addTab(self.goals_widget, "🎯 Goals")
-        self.goals_module = GoalsModule(self.goals_widget)
+        self.goals_module = GoalsModule(self.goals_widget, self.api)  # Add self.api
 
         # Insights tab
         self.insights_widget = QWidget()
         self.tab_widget.addTab(self.insights_widget, "💰 Insights")
-        self.insights_module = InsightsModule(self.insights_widget)
+        self.insights_module = InsightsModule(
+            self.insights_widget, self.api
+        )  # Add self.api
 
         # Connect modules for data sharing
         self.connect_modules()

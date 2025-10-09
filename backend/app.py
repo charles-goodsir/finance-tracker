@@ -60,6 +60,18 @@ app.add_middleware(
 )
 
 
+class GoalIn(BaseModel):
+    user_id: str = "Charles"
+    goal_type: str  # "savings", "debt", "investment"
+    name: str
+    target_amount: float
+    current_amount: float = 0.0
+
+
+class GoalUpdateIn(BaseModel):
+    current_amount: float
+
+
 class TransactionIn(BaseModel):
     user_id: str = "Charles"
     date: str | None = None
@@ -456,7 +468,9 @@ def import_bank_csv(
 ):
     """
     Import transactions from bank CSV format.
-    Expected CSV format: Process Date,Amount,Other Party,Credit Plan Name,Transaction Date,Foreign Details,City,Country Code
+    Supports both:
+    - Credit Card: Process Date,Amount,Other Party,Credit Plan Name,Transaction Date,Foreign Details,City,Country Code
+    - Bank Account: Date,Amount,Other Party,Description,Reference,Particulars,Analysis Code
     """
     try:
         content = file.file.read().decode("utf-8")
@@ -471,10 +485,21 @@ def import_bank_csv(
         }
 
         for row in reader:
-
-            other_party = row.get("Other Party", "").strip()
-            amount_str = row.get("Amount", "0").strip()
-            transaction_date = row.get("Transaction Date", "").strip()
+            # Auto-detect format based on column names
+            if "Transaction Date" in row:
+                # Credit card format
+                other_party = row.get("Other Party", "").strip()
+                amount_str = row.get("Amount", "0").strip()
+                transaction_date = row.get("Transaction Date", "").strip()
+                description = other_party
+            elif "Date" in row:
+                # Bank account format
+                other_party = row.get("Other Party", "").strip()
+                amount_str = row.get("Amount", "0").strip()
+                transaction_date = row.get("Date", "").strip()
+                description = row.get("Description", other_party).strip()
+            else:
+                continue
 
             try:
                 amount = float(amount_str)
@@ -495,9 +520,15 @@ def import_bank_csv(
                         continue
                 else:
                     date_iso = datetime.utcnow().isoformat()
-            cat, conf, reason = classify(other_party, amount)
+            
+            # Use description for classification (more detailed than other_party)
+            classify_text = description if description else other_party
+            cat, conf, reason = classify(classify_text, amount)
 
-            if "payment received" in other_party.lower():
+            # Determine transaction type
+            if "payment received" in classify_text.lower():
+                tx_type = "transfer"
+            elif "transfer" in classify_text.lower() or "to 0732" in other_party.lower() or "from 0732" in other_party.lower():
                 tx_type = "transfer"
             elif amount > 0:
                 tx_type = "income"
@@ -508,7 +539,7 @@ def import_bank_csv(
                 "user_id": user_id,
                 "date": date_iso,
                 "amount": amount,
-                "description": other_party,
+                "description": f"{other_party} - {description}" if description and description != other_party else other_party,
                 "category": cat,
                 "type": tx_type,
                 "frequency": "One-Off",
@@ -598,3 +629,119 @@ def commit_bulk(body: BulkCommitIn):
 # Only mount static files if frontend directory exists (for local development)
 if os.path.exists("frontend"):
     app.mount("/static", StaticFiles(directory="frontend"), name="static")
+
+# ===== GOALS ENDPOINTS =====
+
+
+@app.post("/goals")
+def add_goal_endpoint(goal: GoalIn):
+    """Add a new financial goal"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import add_goal
+
+        goal_id = add_goal(
+            goal.user_id,
+            goal.goal_type,
+            goal.name,
+            goal.target_amount,
+            goal.current_amount,
+        )
+        send_telegram(f"🎯 New goal created: {goal.name} - ${goal.target_amount}")
+        return {"status": "ok", "goal_id": goal_id}
+    else:
+        raise HTTPException(status_code=501, detail="Goals only supported on AWS")
+
+
+@app.get("/goals")
+def list_goals(user_id: str = "Charles"):
+    """Get all goals for a user"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import get_goals
+
+        goals = get_goals(user_id)
+        return {"goals": goals}
+    else:
+        raise HTTPException(status_code=501, detail="Goals only supported on AWS")
+
+
+@app.put("/goals/{goal_id}")
+def update_goal(goal_id: str, update: GoalUpdateIn, user_id: str = "Charles"):
+    """Update goal progress"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import update_goal_progress
+
+        success = update_goal_progress(user_id, goal_id, update.current_amount)
+        if success:
+            return {"status": "ok", "message": "Goal updated"}
+        else:
+            raise HTTPException(status_code=404, detail="Goal not found")
+    else:
+        raise HTTPException(status_code=501, detail="Goals only supported on AWS")
+
+
+# ===== INSIGHTS ENDPOINTS =====
+
+
+@app.get("/insights")
+def get_insights_endpoint(user_id: str = "Charles"):
+    """Generate and return financial insights"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import generate_insights, save_insight
+
+        # Generate fresh insights
+        insights = generate_insights(user_id)
+
+        # Save to database for history
+        save_insight(user_id, insights)
+
+        return insights
+    else:
+        raise HTTPException(status_code=501, detail="Insights only supported on AWS")
+
+
+# ===== ACCOUNT BALANCE ENDPOINTS =====
+
+class AccountBalanceIn(BaseModel):
+    user_id: str = "Charles"
+    account: str  # "savings", "bills", "main", "credit"
+    balance: float
+
+
+@app.post("/accounts/balance")
+def set_balance_endpoint(data: AccountBalanceIn):
+    """Set account balance"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import set_account_balance
+        
+        success = set_account_balance(data.user_id, data.account, data.balance)
+        if success:
+            send_telegram(f"💰 Account balance updated: {data.account} = ${data.balance:.2f}")
+            return {"status": "ok", "message": f"Balance set for {data.account}"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to set balance")
+    else:
+        raise HTTPException(status_code=501, detail="Account balances only supported on AWS")
+
+
+@app.get("/accounts/balances")
+def get_balances_endpoint(user_id: str = "Charles"):
+    """Get all account balances"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import get_account_balances
+        
+        balances = get_account_balances(user_id)
+        return {"balances": balances}
+    else:
+        raise HTTPException(status_code=501, detail="Account balances only supported on AWS")
+
+
+@app.get("/accounts/networth")
+def get_networth_endpoint(user_id: str = "Charles"):
+    """Calculate net worth"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import calculate_net_worth
+        
+        networth_data = calculate_net_worth(user_id)
+        return networth_data
+    else:
+        raise HTTPException(status_code=501, detail="Net worth only supported on AWS")

@@ -1,20 +1,80 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+import requests
 
 
 class InsightsModule:
-    def __init__(self, parent_widget):
+    def __init__(self, parent_widget, api_client):
         self.parent = parent_widget
+        self.api = api_client
         self.setup_ui()
 
     def load_spending_alerts(self):
         """Load spending alerts and suggestions"""
         # Method content here...
 
-    def load_savings_suggestions(self):
-        """Load savings suggestions"""
-        # Method content here...
+    def load_insights_from_aws(self):
+        """Load real insights from AWS"""
+        try:
+            response = requests.get(
+                f"{self.api.aws_api_url}/insights?user_id=Charles", timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                self.update_with_real_data(data)
+            else:
+                print(f"Failed to load insights: {response.text}")
+
+        except Exception as e:
+            print(f"Error loading insights: {e}")
+
+    def update_with_real_data(self, data):
+        """Update UI with real insight data from AWS"""
+        # Update health score
+        score = data.get("health_score", 0)
+        self.health_score.setText(f"Score: {score}/100")
+
+        # Update description based on score
+        if score >= 80:
+            description = "Excellent! You're managing your finances very well."
+            color = "#4CAF50"
+        elif score >= 60:
+            description = "Good job! Keep up the good work."
+            color = "#FFC107"
+        else:
+            description = "There's room for improvement. Review your spending."
+            color = "#F44336"
+
+        self.health_score.setStyleSheet(f"color: {color};")
+        self.health_description.setText(description)
+
+        # Update alerts
+        self.alerts_list.clear()
+        for alert in data.get("alerts", []):
+            self.alerts_list.addItem(alert.get("message", ""))
+
+        # Update suggestions based on category breakdown
+        self.suggestions_list.clear()
+        category_breakdown = data.get("category_breakdown", {})
+
+        if category_breakdown:
+            top_category = max(category_breakdown.items(), key=lambda x: x[1])
+            self.suggestions_list.addItem(
+                f"💡 Your top spending category is {top_category[0]} at ${top_category[1]:.2f}"
+            )
+
+        savings_rate = data.get("savings_rate", 0)
+        if savings_rate < 20:
+            self.suggestions_list.addItem(
+                f"💰 Try to save at least 20% of your income (currently {savings_rate:.0f}%)"
+            )
+        else:
+            self.suggestions_list.addItem(
+                f"🎯 Great savings rate of {savings_rate:.0f}%!"
+            )
+            # Method content here...
 
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -144,9 +204,33 @@ class InsightsModule:
 
         # Load suggestions
 
+        
+
         layout.addWidget(suggestions_frame)
-        self.load_spending_alerts()
-        self.load_savings_suggestions()
+
+        # Add refresh button
+        refresh_btn = QPushButton("🔄 Refresh Insights")
+        refresh_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """
+        )
+        refresh_btn.clicked.connect(self.load_insights_from_aws)
+        layout.addWidget(refresh_btn)
+
+        # Load data after UI is created
+        self.load_insights_from_aws()
 
     def load_spending_alerts(self):
         """Load spending alerts and suggestions"""

@@ -22,6 +22,10 @@ Globals:
         TRANSACTIONS_TABLE: !Ref TransactionsTable
         CATEGORIES_TABLE: !Ref CategoriesTable
         RECURRING_TABLE: !Ref RecurringTable
+        GOALS_TABLE: !Ref GoalsTable              
+        INSIGHTS_TABLE: !Ref InsightsTable        
+        TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+        TELEGRAM_CHAT_ID: !Ref TelegramChatId
 
 Resources:
   # DynamoDB Tables
@@ -69,6 +73,63 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
+  GoalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-Goals"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: goal_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: goal_id
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FinanceTracker
+
+  InsightsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-Insights"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: insight_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: insight_id
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FinanceTracker
+
+  AccountBalancesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-AccountBalances"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: account_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: account_name
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FinanceTracker
+
   # Main FastAPI Lambda Function
   FinanceTrackerFunction:
     Type: AWS::Serverless::Function
@@ -81,6 +142,11 @@ Resources:
           TRANSACTIONS_TABLE: !Ref TransactionsTable
           CATEGORIES_TABLE: !Ref CategoriesTable
           RECURRING_TABLE: !Ref RecurringTable
+          GOALS_TABLE: !Ref GoalsTable
+          INSIGHTS_TABLE: !Ref InsightsTable
+          ACCOUNT_BALANCES_TABLE: !Ref AccountBalancesTable
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          TELEGRAM_CHAT_ID: !Ref TelegramChatId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TransactionsTable
@@ -88,6 +154,12 @@ Resources:
             TableName: !Ref CategoriesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref RecurringTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref GoalsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InsightsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AccountBalancesTable
       Events:
         Api:
           Type: Api

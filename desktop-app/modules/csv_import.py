@@ -156,8 +156,8 @@ class CSVImportModule:
         self.results_text.setStyleSheet(
             """
             QTextEdit {
-                background-color: white;
-                border: 2px solid #e9ecef;
+                background-color: #666;
+                border: 2px solid #666;
                 border-radius: 8px;
                 padding: 10px;
                 font-family: 'Courier New', monospace;
@@ -234,8 +234,20 @@ class CSVImportModule:
 
         self.results_text.append("💳 Transactions:")
         for tx in result["transactions"]:
+            # Format date nicely
+            date_str = tx.get('date', '')
+            if date_str:
+                from datetime import datetime
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    formatted_date = dt.strftime("%d %b %Y")  # e.g., "04 Sep 2025"
+                except:
+                    formatted_date = date_str[:10]  # Fallback to YYYY-MM-DD
+            else:
+                formatted_date = "No date"
+            
             self.results_text.append(
-                f"{tx['description']} → {tx['category']} (${tx['amount']})"
+                f"[{formatted_date}] {tx['description']} → {tx['category']} (${tx['amount']})"
             )
 
         self.pending_transactions = result["transactions"]
@@ -261,3 +273,67 @@ class CSVImportModule:
             )
             self.commit_button.clicked.connect(self.commit_transactions)
             self.parent.layout().addWidget(self.commit_button)
+
+    def commit_transactions(self):
+        """Commit pending transactions to database"""
+        if not hasattr(self, "pending_transactions") or not self.pending_transactions:
+            QMessageBox.warning(
+                self.parent, "No Transactions", "No transactions to commit!"
+            )
+            return
+
+        # Ask for confirmation
+        reply = QMessageBox.question(
+            self.parent,
+            "Confirm Commit",
+            f"Commit {len(self.pending_transactions)} transactions to AWS?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Call API client to commit transactions
+            self.commit_button.setEnabled(False)
+            self.commit_button.setText("⏳ Committing...")
+
+            # Use QTimer to avoid blocking the UI
+            QTimer.singleShot(
+                0, lambda: self.do_commit_transactions(self.pending_transactions)
+            )
+
+    def do_commit_transactions(self, transactions):
+        """Actually commit the transactions"""
+        import requests
+
+        try:
+            payload = {"transactions": transactions}
+
+            response = requests.post(
+                f"{self.api.aws_api_url}/transaction/commit-bulk",
+                json=payload,
+                timeout=30,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                QMessageBox.information(
+                    self.parent,
+                    "Success",
+                    f"✅ Committed {result['saved']} transactions!\n"
+                    f"Failed: {len(result['failed'])}",
+                )
+                self.results_text.append(
+                    f"\n✅ Committed {result['saved']} transactions!"
+                )
+                self.pending_transactions = []
+                self.commit_button.hide()
+            else:
+                QMessageBox.critical(
+                    self.parent, "Error", f"Commit failed: {response.text}"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(self.parent, "Error", f"Commit error: {str(e)}")
+        finally:
+            self.commit_button.setEnabled(True)
+            self.commit_button.setText("💾 Commit Transactions")

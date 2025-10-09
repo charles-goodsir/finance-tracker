@@ -5,10 +5,13 @@ from .widgets import StatCard, StyledTableWidget
 
 
 class DashboardModule:
-    def __init__(self, parent_widget, db_manager):
+    def __init__(self, parent_widget, db_manager, api_client=None):
         self.parent = parent_widget
         self.db = db_manager
+        self.api = api_client
         self.setup_ui()
+        if self.api:
+            self.load_net_worth()
 
     def setup_ui(self):
         # Main layout
@@ -174,4 +177,29 @@ class DashboardModule:
             self.recent_table.setItem(row, 0, QTableWidgetItem(tx["date"]))
             self.recent_table.setItem(row, 1, QTableWidgetItem(tx["description"]))
             self.recent_table.setItem(row, 2, QTableWidgetItem(f"${tx['amount']:.2f}"))
-            self.recent_table.setItem(row, 3, QTableWidgetItem(tx["category"]))
+
+    def load_net_worth(self):
+        """Load and display net worth from AWS"""
+        import requests
+        
+        if not self.api:
+            return
+        
+        try:
+            response = requests.get(
+                f"{self.api.aws_api_url}/accounts/networth?user_id=Charles",
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                print(f"💰 Net Worth: ${data['net_worth']:.2f}")
+                print(f"📈 Assets: ${data['total_assets']:.2f}")
+                print(f"📉 Liabilities: ${data['total_liabilities']:.2f}")
+                print("Account Balances:")
+                for account, balance in data['accounts'].items():
+                    print(f"  {account}: ${balance:.2f}")
+                
+        except Exception as e:
+            print(f"Error loading net worth: {e}")

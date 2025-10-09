@@ -58,6 +58,7 @@ classification_rules = {
         "amazon",
         "cursor",
         "ableton",
+        "flat account"
     ],
     "Shopping": [
         "the warehouse",
