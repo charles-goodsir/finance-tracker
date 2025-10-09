@@ -3,12 +3,13 @@ import json
 import csv
 import io
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic import Field
 from typing import List
 from dotenv import load_dotenv
+
 try:
     from backend.classifier import classify
 except ImportError:
@@ -60,7 +61,7 @@ app.add_middleware(
 
 
 class TransactionIn(BaseModel):
-    user_id: str = "default"
+    user_id: str = "Charles"
     date: str | None = None
     amount: float
     category: str = "uncategorized"
@@ -73,7 +74,7 @@ class TransactionIn(BaseModel):
 
 
 class RecurringTransactionsIn(BaseModel):
-    user_id: str = "default"
+    user_id: str = "Charles"
     amount: float
     category: str = "uncategorized"
     description: str = ""
@@ -85,7 +86,7 @@ class RecurringTransactionsIn(BaseModel):
 
 
 class ClassifiedTx(BaseModel):
-    user_id: str = "default"
+    user_id: str = "Charles"
     date: str
     amount: float
     category: str
@@ -93,6 +94,7 @@ class ClassifiedTx(BaseModel):
     type: str = Field(default="expense")  # "income" | "expense"
     tags: str = ""
     frequency: str = "One-Off"
+    account: str = "main"
 
 
 class BulkCommitIn(BaseModel):
@@ -114,7 +116,7 @@ def startup():
 @app.get("/")
 def serve_frontend():
     from fastapi.responses import FileResponse
-    
+
     # Only serve frontend if it exists (for local development)
     if os.path.exists("frontend/index.html"):
         return FileResponse("frontend/index.html")
@@ -125,10 +127,10 @@ def serve_frontend():
             "version": "2.0.0",
             "endpoints": {
                 "transactions": "/transactions",
-                "categories": "/categories", 
+                "categories": "/categories",
                 "report": "/report",
-                "csv_import": "/import-csv-smart"
-            }
+                "csv_import": "/import-csv-smart",
+            },
         }
 
 
@@ -404,9 +406,19 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
         }
 
         for row in reader:
-            desc = row.get("Other Party") or row.get("description") or row.get("Description") or ""
+            desc = (
+                row.get("Other Party")
+                or row.get("description")
+                or row.get("Description")
+                or ""
+            )
             amt = float(row.get("Amount") or row.get("amount") or 0)
-            date = row.get("Transaction Date") or row.get("date") or row.get("Date") or datetime.utcnow().isoformat()
+            date = (
+                row.get("Transaction Date")
+                or row.get("date")
+                or row.get("Date")
+                or datetime.utcnow().isoformat()
+            )
 
             cat, conf, reason = classify(desc, amt)
             tx = {
@@ -437,7 +449,11 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
 
 
 @app.post("/import-bank-csv")
-def import_bank_csv(file: UploadFile = File(...), user_id: str = "defauly"):
+def import_bank_csv(
+    file: UploadFile = File(...),
+    user_id: str = Form("Charles"),
+    account: str = Form("main"),
+):
     """
     Import transactions from bank CSV format.
     Expected CSV format: Process Date,Amount,Other Party,Credit Plan Name,Transaction Date,Foreign Details,City,Country Code
@@ -487,7 +503,6 @@ def import_bank_csv(file: UploadFile = File(...), user_id: str = "defauly"):
                 tx_type = "income"
             else:
                 tx_type = "expense"
-            
 
             tx = {
                 "user_id": user_id,
@@ -497,6 +512,7 @@ def import_bank_csv(file: UploadFile = File(...), user_id: str = "defauly"):
                 "category": cat,
                 "type": tx_type,
                 "frequency": "One-Off",
+                "account": account,
                 "classification": {
                     "category": cat,
                     "confidence": conf,
@@ -535,6 +551,7 @@ def commit_bulk(body: BulkCommitIn):
                         tx.type,
                         tx.tags,
                         tx.frequency,
+                        tx.account,  # ADD THIS LINE
                     )
                     saved += 1
                 except Exception as e:
@@ -546,7 +563,7 @@ def commit_bulk(body: BulkCommitIn):
                 try:
                     date = tx.date or datetime.utcnow().isoformat()
                     cur.execute(
-                        "INSERT INTO transactions (user_id, date, amount, category, description, type, tags, frequency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO transactions (user_id, date, amount, category, description, type, tags, frequency, account) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (
                             tx.user_id,
                             date,
@@ -556,6 +573,7 @@ def commit_bulk(body: BulkCommitIn):
                             tx.type,
                             tx.tags,
                             tx.frequency,
+                            tx.account,
                         ),
                     )
                     saved += 1
@@ -565,8 +583,8 @@ def commit_bulk(body: BulkCommitIn):
             conn.close()
 
         if saved > 0:
-          send_telegram(f"💰 Bulk commit: {saved} transactions saved successfully!")
-        
+            send_telegram(f"💰 Bulk commit: {saved} transactions saved successfully!")
+
         return {
             "status": "ok",
             "saved": saved,

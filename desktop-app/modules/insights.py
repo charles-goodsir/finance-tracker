@@ -24,7 +24,7 @@ class InsightsModule:
         title = QLabel("💰 Smart Insights")
         title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #333; padding: 10px;")
+        title.setStyleSheet("color: white; padding: 10px;")
         layout.addWidget(title)
 
         # Financial health score
@@ -88,7 +88,7 @@ class InsightsModule:
         self.alerts_list.setStyleSheet(
             """
             QListWidget {
-                background-color: white;
+                background-color: #666;
                 border: 1px solid #ddd;
                 border-radius: 5px;
             }
@@ -101,7 +101,6 @@ class InsightsModule:
         alerts_layout.addWidget(self.alerts_list)
 
         # Load alerts
-        
 
         layout.addWidget(alerts_frame)
 
@@ -131,7 +130,7 @@ class InsightsModule:
         self.suggestions_list.setStyleSheet(
             """
             QListWidget {
-                background-color: white;
+                background-color: #666;
                 border: 1px solid #ddd;
                 border-radius: 5px;
             }

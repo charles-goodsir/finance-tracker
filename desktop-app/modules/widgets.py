@@ -14,7 +14,7 @@ class StatCard(QFrame):
         self.setStyleSheet(
             f"""
             QFrame {{
-                background-color: white;
+                background-color: #2d3748;
                 border: 2px solid {color};
                 border-radius: 10px;
                 margin: 5px;

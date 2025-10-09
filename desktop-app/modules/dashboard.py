@@ -21,7 +21,7 @@ class DashboardModule:
             """
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
+                    stop:0 #4a5568, stop:1 #5a67d8);
                 border-radius: 10px;
                 margin: 5px;
             }
@@ -72,7 +72,7 @@ class DashboardModule:
                 font-size: 14px;
                 border: 2px solid #cccccc;
                 border-radius: 8px;
-                margin-top: 15px;
+                margin-top: 25px;
                 padding-top: 10px;
                 background-color: white;
             }
@@ -147,6 +147,22 @@ class DashboardModule:
         self.income_card.update_value(f"${income:.2f}")
         self.expense_card.update_value(f"${expenses:.2f}")
         self.net_card.update_value(f"${net:.2f}")
+
+        self.update_account_balances(transactions)
+
+    def update_account_balances(self, transactions):
+        """Calculate balances for each account"""
+        from modules.accounts import ACCOUNT_TYPES
+
+        balances = {account_id: 0 for account_id in ACCOUNT_TYPES.keys()}
+
+        for tx in transactions:
+            account = tx.get("account", "main")
+            if account in balances:
+                balances[account] += tx["amount"]
+
+        # You can display these balances in the accounts module
+        print(f"Account Balances: {balances}")
 
     def update_recent_transactions(self, transactions):
         """Update the recent transactions table"""

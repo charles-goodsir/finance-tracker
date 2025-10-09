@@ -16,7 +16,7 @@ class GoalsModule:
         title = QLabel("🎯 Financial Goals")
         title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #333; padding: 10px;")
+        title.setStyleSheet("color: white; padding: 10px;")
         layout.addWidget(title)
 
         # Add goal button

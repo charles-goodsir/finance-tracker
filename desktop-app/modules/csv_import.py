@@ -18,7 +18,7 @@ class CSVImportModule:
         title = QLabel("📁 Smart CSV Import")
         title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #333; padding: 10px;")
+        title.setStyleSheet("color: white; padding: 10px;")
         layout.addWidget(title)
 
         # File selection
@@ -26,8 +26,8 @@ class CSVImportModule:
         file_frame.setStyleSheet(
             """
             QFrame {
-                background-color: #f8f9fa;
-                border: 2px solid #e9ecef;
+                background-color: #2d3748;
+                border: 2px solid #4a5568;
                 border-radius: 8px;
                 padding: 10px;
             }
@@ -37,7 +37,7 @@ class CSVImportModule:
         file_frame.setLayout(file_layout)
 
         csv_label = QLabel("📄 CSV File:")
-        csv_label.setStyleSheet("color: #333; font-weight: bold; font-size: 14px;")
+        csv_label.setStyleSheet("color: white; font-weight: bold; font-size: 14px;")
         file_layout.addWidget(csv_label)
 
         self.file_path_edit = QLineEdit()
@@ -78,6 +78,53 @@ class CSVImportModule:
         file_layout.addWidget(browse_btn)
 
         layout.addWidget(file_frame)
+
+        account_frame = QFrame()
+        account_frame.setStyleSheet(
+            """
+            QFrame {
+                background-color: #2d3748;
+                border: 2px solid #4a5568;
+                border-radius: 8px;
+                padding: 10px;
+                margin-top: 10px;
+            }
+        """
+        )
+        account_layout = QHBoxLayout()
+        account_frame.setLayout(account_layout)
+
+        account_label = QLabel("🏦 Select Account:")
+        account_label.setStyleSheet("color: white; font-weight: bold; font-size: 14px;")
+        account_layout.addWidget(account_label)
+
+        self.account_selector = QComboBox()
+        self.account_selector.setStyleSheet(
+            """
+            QComboBox {
+                padding: 8px;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 200px;
+        }
+        QComboBox: focus {
+            border-color: #2196F3;
+        }
+    """
+        )
+
+        from modules.accounts import ACCOUNT_TYPES
+
+        for account_id, account_info in ACCOUNT_TYPES.items():
+            self.account_selector.addItem(
+                f"{account_info['icon']} {account_info['name']}", account_id
+            )
+
+        account_layout.addWidget(self.account_selector)
+        account_layout.addStretch()
+
+        layout.addWidget(account_frame)
 
         # Import button
         self.import_button = QPushButton("🚀 Import with Smart Classification")
@@ -143,11 +190,13 @@ class CSVImportModule:
     def _do_import(self, file_path):
         """Do the actual import in main thread"""
         try:
+            selected_account = self.account_selector.currentData()
+
             import requests
 
             with open(file_path, "rb") as f:
                 files = {"file": f}
-                data = {"user_id": "default"}
+                data = {"user_id": "Charles", "account": selected_account}
                 response = requests.post(
                     f"{self.api.aws_api_url}/import-bank-csv",
                     files=files,

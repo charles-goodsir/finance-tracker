@@ -34,6 +34,7 @@ class DatabaseManager:
                         description TEXT,
                         category TEXT,
                         type TEXT,
+                        account TEXT,
                         synced INTEGER DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )

@@ -32,6 +32,27 @@ class FinanceTrackerGUI(QMainWindow):
         # Setup database in background
         self.db.setup_database()
 
+    def apply_dark_mode(self):
+        """Apply dark mode palette to the application"""
+        dark_palette = QPalette()
+
+        # Base colors
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
+        dark_palette.setColor(QPalette.ColorRole.Base, QColor(35, 35, 35))
+        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
+        dark_palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
+        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor(255, 255, 255))
+        dark_palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+        dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, QColor(35, 35, 35))
+
+        QApplication.instance().setPalette(dark_palette)
+
     def create_widgets(self):
         # Central widget with tabs
         self.tab_widget = QTabWidget()
@@ -91,6 +112,10 @@ def main():
 
     # Create and show main window
     window = FinanceTrackerGUI()
+
+    # Always apply dark mode
+    window.apply_dark_mode()
+
     window.show()
 
     sys.exit(app.exec())

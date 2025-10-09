@@ -18,7 +18,7 @@ class TransactionsModule:
         title = QLabel("💳 All Transactions")
         title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #333; padding: 10px;")
+        title.setStyleSheet("color: white; padding: 10px;")
         layout.addWidget(title)
 
         # Search and filter bar
@@ -26,8 +26,8 @@ class TransactionsModule:
         filter_frame.setStyleSheet(
             """
             QFrame {
-                background-color: #f8f9fa;
-                border: 2px solid #e9ecef;
+                background-color: #2d3748;
+                border: 2px solid #4a5568;
                 border-radius: 8px;
                 padding: 10px;
             }
@@ -76,7 +76,7 @@ class TransactionsModule:
 
         # Transactions table
         self.transactions_table = StyledTableWidget(
-            ["Date", "Description", "Amount", "Category", "Type"]
+            ["Date", "Description", "Amount", "Category", "Account", "Type"]
         )
         layout.addWidget(self.transactions_table)
 
@@ -128,7 +128,10 @@ class TransactionsModule:
                 row, 2, QTableWidgetItem(f"${tx['amount']:.2f}")
             )
             self.transactions_table.setItem(row, 3, QTableWidgetItem(tx["category"]))
-            self.transactions_table.setItem(row, 4, QTableWidgetItem(tx["type"]))
+            self.transactions_table.setItem(
+                row, 4, QTableWidgetItem(tx.get("account", "main"))
+            )  # ADD THIS
+            self.transactions_table.setItem(row, 5, QTableWidgetItem(tx["type"]))
 
     def filter_transactions(self):
         """Filter transactions based on search and category"""

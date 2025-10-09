@@ -54,30 +54,31 @@ def init_db():
 
 
 def add_transaction(
-    user_id: str,
-    amount: float,
-    category: str,
-    description: str,
-    tx_type: str = "expense",
-    tags: str = "",
-    frequency: str = "One-Off",
+    user_id, amount, category, description, tx_type, tags, frequency, account="main"
 ):
-    """Add a transaction to DynamoDB"""
-    transaction_id = str(uuid.uuid4())
-    item = {
-        "user_id": user_id,
-        "transaction_id": transaction_id,
-        "date": datetime.utcnow().isoformat(),
-        "amount": Decimal(str(amount)),
-        "category": category,
-        "description": description,
-        "type": tx_type,
-        "tags": tags,
-        "frequency": frequency,
-        "created_at": datetime.utcnow().isoformat(),
-    }
+    """Add transaction to DynamoDB with account field"""
+    import uuid
+    from datetime import datetime
+    from decimal import Decimal
 
-    transactions_table.put_item(Item=item)
+    transaction_id = str(uuid.uuid4())
+    timestamp = datetime.utcnow().isoformat()
+
+    transactions_table.put_item(
+        Item={
+            "user_id": user_id,
+            "transaction_id": transaction_id,
+            "date": timestamp,
+            "amount": Decimal(str(amount)),
+            "category": category,
+            "description": description,
+            "type": tx_type,
+            "tags": tags,
+            "frequency": frequency,
+            "account": account,  # ADD THIS LINE
+            "created_at": timestamp,
+        }
+    )
     return transaction_id
 
 
