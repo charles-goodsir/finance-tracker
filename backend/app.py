@@ -61,7 +61,7 @@ app.add_middleware(
 
 
 class GoalIn(BaseModel):
-    user_id: str = "Charles"
+    user_id: str = "user1"
     goal_type: str  # "savings", "debt", "investment"
     name: str
     target_amount: float
@@ -73,7 +73,7 @@ class GoalUpdateIn(BaseModel):
 
 
 class TransactionIn(BaseModel):
-    user_id: str = "Charles"
+    user_id: str = "user1"
     date: str | None = None
     amount: float
     category: str = "uncategorized"
@@ -86,7 +86,7 @@ class TransactionIn(BaseModel):
 
 
 class RecurringTransactionsIn(BaseModel):
-    user_id: str = "Charles"
+    user_id: str = "user1"
     amount: float
     category: str = "uncategorized"
     description: str = ""
@@ -98,7 +98,7 @@ class RecurringTransactionsIn(BaseModel):
 
 
 class ClassifiedTx(BaseModel):
-    user_id: str = "Charles"
+    user_id: str = "user1"
     date: str
     amount: float
     category: str
@@ -463,7 +463,7 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
 @app.post("/import-bank-csv")
 def import_bank_csv(
     file: UploadFile = File(...),
-    user_id: str = Form("Charles"),
+    user_id: str = Form("user1"),
     account: str = Form("main"),
 ):
     """
@@ -523,17 +523,33 @@ def import_bank_csv(
             
             # Use description for classification (more detailed than other_party)
             classify_text = description if description else other_party
-            cat, conf, reason = classify(classify_text, amount)
-
-            # Determine transaction type
-            if "payment received" in classify_text.lower():
+            
+            # ✅ CHECK FOR TRANSFERS FIRST (before classification)
+            # Detects transfers between accounts (masked account numbers)
+            is_transfer = (
+                "payment received" in classify_text.lower() or
+                "to ****" in other_party.lower() or
+                "from ****" in other_party.lower() or
+                "frm " in other_party.lower() and len(other_party) > 10 or  # "FRM" followed by account number
+                ("online banking" in description.lower() and ("to " in other_party.lower() or "from " in other_party.lower())) or
+                ("direct credit" in description.lower() and any(char.isdigit() for char in other_party))  # Direct credit with numbers
+            )
+            
+            if is_transfer:
+                # This is a transfer - don't classify, mark as transfer
+                cat = "Transfers"
+                conf = 0.95
+                reason = "Transfer between accounts detected"
                 tx_type = "transfer"
-            elif "transfer" in classify_text.lower() or "to 0732" in other_party.lower() or "from 0732" in other_party.lower():
-                tx_type = "transfer"
-            elif amount > 0:
-                tx_type = "income"
             else:
-                tx_type = "expense"
+                # Not a transfer - classify normally
+                cat, conf, reason = classify(classify_text, amount, use_ai=True)
+                
+                # Determine transaction type
+                if amount > 0:
+                    tx_type = "income"
+                else:
+                    tx_type = "expense"
 
             tx = {
                 "user_id": user_id,
@@ -653,7 +669,7 @@ def add_goal_endpoint(goal: GoalIn):
 
 
 @app.get("/goals")
-def list_goals(user_id: str = "Charles"):
+def list_goals(user_id: str = "user1"):
     """Get all goals for a user"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import get_goals
@@ -665,7 +681,7 @@ def list_goals(user_id: str = "Charles"):
 
 
 @app.put("/goals/{goal_id}")
-def update_goal(goal_id: str, update: GoalUpdateIn, user_id: str = "Charles"):
+def update_goal(goal_id: str, update: GoalUpdateIn, user_id: str = "user1"):
     """Update goal progress"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import update_goal_progress
@@ -683,7 +699,7 @@ def update_goal(goal_id: str, update: GoalUpdateIn, user_id: str = "Charles"):
 
 
 @app.get("/insights")
-def get_insights_endpoint(user_id: str = "Charles"):
+def get_insights_endpoint(user_id: str = "user1"):
     """Generate and return financial insights"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import generate_insights, save_insight
@@ -702,7 +718,7 @@ def get_insights_endpoint(user_id: str = "Charles"):
 # ===== ACCOUNT BALANCE ENDPOINTS =====
 
 class AccountBalanceIn(BaseModel):
-    user_id: str = "Charles"
+    user_id: str = "user1"
     account: str  # "savings", "bills", "main", "credit"
     balance: float
 
@@ -724,7 +740,7 @@ def set_balance_endpoint(data: AccountBalanceIn):
 
 
 @app.get("/accounts/balances")
-def get_balances_endpoint(user_id: str = "Charles"):
+def get_balances_endpoint(user_id: str = "user1"):
     """Get all account balances"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import get_account_balances
@@ -736,7 +752,7 @@ def get_balances_endpoint(user_id: str = "Charles"):
 
 
 @app.get("/accounts/networth")
-def get_networth_endpoint(user_id: str = "Charles"):
+def get_networth_endpoint(user_id: str = "user1"):
     """Calculate net worth"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import calculate_net_worth
@@ -792,3 +808,96 @@ def ai_classify_endpoint(description: str, amount: float):
             }
     except ImportError:
         raise HTTPException(status_code=501, detail="AI classifier not available")
+
+
+# ===== BALANCE SNAPSHOT ENDPOINTS =====
+
+class BalanceSnapshotIn(BaseModel):
+    user_id: str = "user1"
+    snapshot_date: str  # Format: YYYY-MM-DD
+    savings: float = 0
+    bills: float = 0
+    main: float = 0
+    credit: float = 0
+
+
+@app.post("/snapshots/balance")
+def save_snapshot_endpoint(data: BalanceSnapshotIn):
+    """Save balance snapshot for a specific date"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import save_balance_snapshot
+        
+        balances = {
+            'savings': data.savings,
+            'bills': data.bills,
+            'main': data.main,
+            'credit': data.credit
+        }
+        
+        success = save_balance_snapshot(data.user_id, data.snapshot_date, balances)
+        
+        if success:
+            total_assets = data.savings + data.bills + data.main
+            send_telegram(f"📸 Balance snapshot saved for {data.snapshot_date}\n💰 Total Assets: ${total_assets:.2f}")
+            return {
+                "status": "success",
+                "message": f"Snapshot saved for {data.snapshot_date}",
+                "total_assets": total_assets
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save snapshot")
+    else:
+        raise HTTPException(status_code=501, detail="Snapshots only supported on AWS")
+
+
+@app.get("/snapshots/balance/{snapshot_date}")
+def get_snapshot_endpoint(snapshot_date: str, user_id: str = "user1"):
+    """Get balance snapshot for a specific date"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import get_balance_snapshot
+        
+        snapshot = get_balance_snapshot(user_id, snapshot_date)
+        
+        if snapshot:
+            return snapshot
+        else:
+            raise HTTPException(status_code=404, detail=f"No snapshot found for {snapshot_date}")
+    else:
+        raise HTTPException(status_code=501, detail="Snapshots only supported on AWS")
+
+
+@app.get("/snapshots/list")
+def list_snapshots_endpoint(user_id: str = "user1", limit: int = 12):
+    """Get recent balance snapshots"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import get_balance_snapshots
+        
+        snapshots = get_balance_snapshots(user_id, limit)
+        return {"snapshots": snapshots, "count": len(snapshots)}
+    else:
+        raise HTTPException(status_code=501, detail="Snapshots only supported on AWS")
+
+
+@app.get("/summary/period")
+def period_summary_endpoint(
+    user_id: str = "user1",
+    start_date: str = None,
+    end_date: str = None
+):
+    """
+    Get comprehensive period summary with both balance-based and transaction-based calculations.
+    Example: /summary/period?start_date=2024-09-01&end_date=2024-09-30
+    """
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import calculate_period_summary
+        
+        if not start_date or not end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Both start_date and end_date required (format: YYYY-MM-DD)"
+            )
+        
+        summary = calculate_period_summary(user_id, start_date, end_date)
+        return summary
+    else:
+        raise HTTPException(status_code=501, detail="Period summary only supported on AWS")

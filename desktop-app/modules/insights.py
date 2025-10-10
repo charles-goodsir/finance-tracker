@@ -18,7 +18,7 @@ class InsightsModule:
         """Load real insights from AWS"""
         try:
             response = requests.get(
-                f"{self.api.aws_api_url}/insights?user_id=Charles", timeout=10
+                f"{self.api.aws_api_url}/insights?user_id=user1", timeout=10
             )
 
             if response.status_code == 200:

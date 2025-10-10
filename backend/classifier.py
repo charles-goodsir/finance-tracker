@@ -62,7 +62,6 @@ classification_rules = {
         "deposit",
         "refund",
         "interest",
-        "datacom systems",
         # REMOVED "payment received" - this is credit card payment, not income
     ],
     "Bills & Utilities": [

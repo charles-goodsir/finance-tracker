@@ -15,6 +15,7 @@ RECURRING_TABLE = os.environ.get("RECURRING_TABLE", "FinanceTracker-Recurring")
 GOALS_TABLE = os.environ.get("GOALS_TABLE", "FinanceTracker-Goals")
 INSIGHTS_TABLE = os.environ.get("INSIGHTS_TABLE", "FinanceTracker-Insights")
 ACCOUNT_BALANCES_TABLE = os.environ.get("ACCOUNT_BALANCES_TABLE", "FinanceTracker-AccountBalances")
+BALANCE_SNAPSHOTS_TABLE = os.environ.get("BALANCE_SNAPSHOTS_TABLE", "FinanceTracker-BalanceSnapshots")
 
 
 transactions_table = dynamodb.Table(TRANSACTIONS_TABLE)
@@ -23,6 +24,7 @@ recurring_table = dynamodb.Table(RECURRING_TABLE)
 goals_table = dynamodb.Table(GOALS_TABLE)
 insights_table = dynamodb.Table(INSIGHTS_TABLE)
 account_balances_table = dynamodb.Table(ACCOUNT_BALANCES_TABLE)
+balance_snapshots_table = dynamodb.Table(BALANCE_SNAPSHOTS_TABLE)
 
 
 def init_db():
@@ -387,4 +389,171 @@ def calculate_net_worth(user_id: str) -> Dict:
             'main': balances.get('main', 0),
             'credit': balances.get('credit', 0)
         }
+    }
+
+
+# ===== BALANCE SNAPSHOT FUNCTIONS =====
+
+def save_balance_snapshot(user_id: str, snapshot_date: str, balances: Dict[str, float]) -> bool:
+    """
+    Save a balance snapshot for a specific date.
+    Used for month-end balance tracking.
+    """
+    try:
+        total_assets = (
+            balances.get('savings', 0) +
+            balances.get('bills', 0) +
+            balances.get('main', 0)
+        )
+        
+        balance_snapshots_table.put_item(
+            Item={
+                'user_id': user_id,
+                'snapshot_date': snapshot_date,
+                'savings': Decimal(str(balances.get('savings', 0))),
+                'bills': Decimal(str(balances.get('bills', 0))),
+                'main': Decimal(str(balances.get('main', 0))),
+                'credit': Decimal(str(balances.get('credit', 0))),
+                'total_assets': Decimal(str(total_assets)),
+                'created_at': datetime.utcnow().isoformat()
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving balance snapshot: {e}")
+        return False
+
+
+def get_balance_snapshot(user_id: str, snapshot_date: str) -> Dict:
+    """Get balance snapshot for a specific date"""
+    try:
+        response = balance_snapshots_table.get_item(
+            Key={
+                'user_id': user_id,
+                'snapshot_date': snapshot_date
+            }
+        )
+        
+        if 'Item' in response:
+            item = response['Item']
+            return {
+                'snapshot_date': item['snapshot_date'],
+                'savings': float(item['savings']),
+                'bills': float(item['bills']),
+                'main': float(item['main']),
+                'credit': float(item['credit']),
+                'total_assets': float(item['total_assets'])
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting balance snapshot: {e}")
+        return None
+
+
+def get_balance_snapshots(user_id: str, limit: int = 12) -> List[Dict]:
+    """Get recent balance snapshots (last N months)"""
+    try:
+        response = balance_snapshots_table.query(
+            KeyConditionExpression='user_id = :user_id',
+            ExpressionAttributeValues={':user_id': user_id},
+            ScanIndexForward=False,  # Sort descending (newest first)
+            Limit=limit
+        )
+        
+        snapshots = []
+        for item in response.get('Items', []):
+            snapshots.append({
+                'snapshot_date': item['snapshot_date'],
+                'savings': float(item['savings']),
+                'bills': float(item['bills']),
+                'main': float(item['main']),
+                'credit': float(item['credit']),
+                'total_assets': float(item['total_assets'])
+            })
+        
+        return snapshots
+    except Exception as e:
+        print(f"Error getting balance snapshots: {e}")
+        return []
+
+
+def calculate_period_summary(user_id: str, start_date: str, end_date: str) -> Dict:
+    """
+    Calculate financial summary for a period using BOTH methods:
+    1. Balance-based (from snapshots)
+    2. Transaction-based (from transactions)
+    """
+    from datetime import datetime
+    
+    # Get balance snapshots
+    start_snapshot = get_balance_snapshot(user_id, start_date)
+    end_snapshot = get_balance_snapshot(user_id, end_date)
+    
+    # Get transactions in period (excluding transfers)
+    transactions = get_transactions(user_id, limit=10000)
+    period_transactions = [
+        t for t in transactions
+        if start_date <= t.get('date', '') <= end_date
+        and t.get('type') != 'transfer'
+    ]
+    
+    # Calculate transaction-based
+    total_income = sum(
+        float(t['amount']) for t in period_transactions
+        if float(t['amount']) > 0
+    )
+    total_spending = sum(
+        float(t['amount']) for t in period_transactions
+        if float(t['amount']) < 0
+    )
+    transaction_savings = total_income + total_spending  # spending is negative
+    
+    # Calculate balance-based (if snapshots exist)
+    balance_savings = None
+    discrepancy = None
+    if start_snapshot and end_snapshot:
+        balance_savings = end_snapshot['total_assets'] - start_snapshot['total_assets']
+        discrepancy = balance_savings - transaction_savings
+    
+    # Calculate savings rate
+    savings_rate = (transaction_savings / total_income * 100) if total_income > 0 else 0
+    
+    # Generate verification status
+    if discrepancy is not None:
+        if abs(discrepancy) < 10:
+            status = "verified"
+            status_message = "✅ Accounts balance perfectly!"
+        elif abs(discrepancy) < 100:
+            status = "minor_difference"
+            status_message = f"⚠️ Small ${abs(discrepancy):.2f} difference - check for cash transactions"
+        else:
+            status = "needs_review"
+            status_message = f"⚠️ ${abs(discrepancy):.2f} unaccounted for - review transactions"
+    else:
+        status = "no_snapshots"
+        status_message = "⚠️ No balance snapshots - enter start/end balances for verification"
+    
+    return {
+        "user_id": user_id,
+        "period": {
+            "start_date": start_date,
+            "end_date": end_date
+        },
+        "balance_based": {
+            "starting_balance": start_snapshot['total_assets'] if start_snapshot else None,
+            "ending_balance": end_snapshot['total_assets'] if end_snapshot else None,
+            "savings": balance_savings
+        } if start_snapshot and end_snapshot else None,
+        "transaction_based": {
+            "income": total_income,
+            "spending": abs(total_spending),
+            "net_savings": transaction_savings,
+            "savings_rate": round(savings_rate, 1)
+        },
+        "verification": {
+            "status": status,
+            "message": status_message,
+            "discrepancy": discrepancy
+        },
+        "transaction_count": len(period_transactions)
     }

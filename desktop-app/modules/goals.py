@@ -90,7 +90,7 @@ class GoalsModule:
         """Load goals from AWS"""
         try:
             response = requests.get(
-                f"{self.api.aws_api_url}/goals?user_id=Charles", timeout=10
+                f"{self.api.aws_api_url}/goals?user_id=user1", timeout=10
             )
 
             if response.status_code == 200:
@@ -258,7 +258,7 @@ class GoalsModule:
             }
 
             payload = {
-                "user_id": "Charles",
+                "user_id": "user1",
                 "goal_type": type_map.get(goal_type, "savings"),
                 "name": name,
                 "target_amount": float(target or 0),

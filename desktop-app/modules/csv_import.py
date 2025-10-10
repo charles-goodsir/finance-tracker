@@ -196,7 +196,7 @@ class CSVImportModule:
 
             with open(file_path, "rb") as f:
                 files = {"file": f}
-                data = {"user_id": "Charles", "account": selected_account}
+                data = {"user_id": "user1", "account": selected_account}
                 response = requests.post(
                     f"{self.api.aws_api_url}/import-bank-csv",
                     files=files,

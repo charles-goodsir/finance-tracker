@@ -187,7 +187,7 @@ class DashboardModule:
         
         try:
             response = requests.get(
-                f"{self.api.aws_api_url}/accounts/networth?user_id=Charles",
+                f"{self.api.aws_api_url}/accounts/networth?user_id=user1",
                 timeout=10
             )
             

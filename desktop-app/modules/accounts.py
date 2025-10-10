@@ -144,7 +144,7 @@ class AccountsModule:
             response = requests.post(
                 f"{self.api.aws_api_url}/accounts/balance",
                 json={
-                    "user_id": "Charles",
+                    "user_id": "user1",
                     "account": account,
                     "balance": balance
                 },

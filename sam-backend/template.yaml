@@ -137,6 +137,25 @@ Resources:
         - Key: Application
           Value: FinanceTracker
 
+  BalanceSnapshotsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-BalanceSnapshots"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: snapshot_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: snapshot_date
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FinanceTracker
+
   # Main FastAPI Lambda Function
   FinanceTrackerFunction:
     Type: AWS::Serverless::Function
@@ -152,6 +171,7 @@ Resources:
           GOALS_TABLE: !Ref GoalsTable
           INSIGHTS_TABLE: !Ref InsightsTable
           ACCOUNT_BALANCES_TABLE: !Ref AccountBalancesTable
+          BALANCE_SNAPSHOTS_TABLE: !Ref BalanceSnapshotsTable
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           GEMINI_API_KEY: !Ref GeminiApiKey
@@ -168,6 +188,8 @@ Resources:
             TableName: !Ref InsightsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref AccountBalancesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BalanceSnapshotsTable
       Events:
         Api:
           Type: Api
