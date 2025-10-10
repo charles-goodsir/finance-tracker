@@ -12,15 +12,15 @@ load_dotenv()
 
 # Test transactions
 test_transactions = [
-    ("WOOLWORTHS AUCKLAND", -45.67),
+    ("WOOLWORTHS ", -45.67),
     ("UBER TRIP TO AIRPORT", -32.50),
-    ("MYSTERY CAFE PONSONBY", -18.90),
+    ("MYSTERY CAFE ", -18.90),
     ("ATM WITHDRAWAL", -100.00),
     ("GOOGLE SYSTEMS SALARY", 5000.00),
     ("NETFLIX SUBSCRIPTION", -19.99),
     ("PAYMENT RECEIVED", 150.00),
     ("BP PETROL STATION", -75.50),
-    ("SPARK NZ MOBILE", -89.00),
+    ("SPARK  MOBILE", -89.00),
     ("DOMINOS PIZZA", -24.50),
 ]
 
