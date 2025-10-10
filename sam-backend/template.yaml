@@ -13,6 +13,12 @@ Parameters:
     Description: Telegram Chat ID for notifications
     NoEcho: true
 
+  GeminiApiKey:
+    Type: String
+    Description: Google Gemini API Key for AI transaction classification
+    Default: ""
+    NoEcho: true
+
 Globals:
   Function:
     Timeout: 30
@@ -26,6 +32,7 @@ Globals:
         INSIGHTS_TABLE: !Ref InsightsTable        
         TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
         TELEGRAM_CHAT_ID: !Ref TelegramChatId
+        GEMINI_API_KEY: !Ref GeminiApiKey
 
 Resources:
   # DynamoDB Tables
@@ -147,6 +154,7 @@ Resources:
           ACCOUNT_BALANCES_TABLE: !Ref AccountBalancesTable
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
+          GEMINI_API_KEY: !Ref GeminiApiKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref TransactionsTable

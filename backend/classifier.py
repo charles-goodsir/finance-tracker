@@ -1,3 +1,17 @@
+from typing import Optional, Tuple
+
+# Import AI classifier (optional dependency)
+try:
+    from ai_classifier import classify_with_ai, is_ai_enabled
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    def classify_with_ai(description: str, amount: float) -> Optional[str]:
+        return None
+    def is_ai_enabled() -> bool:
+        return False
+
+
 classification_rules = {
     "Credit Card Payments": [
         "payment received",
@@ -77,9 +91,17 @@ classification_rules = {
 }
 
 
-def classify(description, amount):
+def classify(description, amount, use_ai: bool = True):
     """
-    Classify a transaction based on description and amount.
+    Classify a transaction using hybrid approach:
+    1. Try rule-based classification first (fast & free)
+    2. If uncertain, use AI as fallback (if enabled)
+    
+    Args:
+        description: Transaction description
+        amount: Transaction amount
+        use_ai: Enable AI fallback for uncertain cases
+    
     Returns: (category, confidence, reason)
     """
     description_lower = description.lower().strip()
@@ -97,7 +119,14 @@ def classify(description, amount):
                 reason = f"Matched keyword: {keyword}"
                 return category, confidence, reason
 
-    # Default classification
+    # Rule-based failed, try AI if enabled
+    if use_ai and is_ai_enabled():
+        print(f"🤖 Using AI for: {description}")
+        ai_category = classify_with_ai(description, amount)
+        if ai_category:
+            return ai_category, 0.75, "AI classification"
+
+    # Default classification (both rule-based and AI failed)
     if amount > 0:
         return "Income", 0.3, "Positive amount, no specific match"
     else:

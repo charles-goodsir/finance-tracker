@@ -745,3 +745,50 @@ def get_networth_endpoint(user_id: str = "Charles"):
         return networth_data
     else:
         raise HTTPException(status_code=501, detail="Net worth only supported on AWS")
+
+
+# ===== AI CLASSIFICATION ENDPOINTS =====
+
+@app.get("/ai/status")
+def ai_status_endpoint():
+    """Get AI classification status and availability"""
+    try:
+        from ai_classifier import get_ai_classifier
+        classifier = get_ai_classifier()
+        return classifier.get_status()
+    except ImportError:
+        return {
+            "enabled": False,
+            "provider": None,
+            "model": None,
+            "library_available": False,
+            "api_key_configured": False,
+            "error": "ai_classifier module not available"
+        }
+
+
+@app.post("/ai/classify")
+def ai_classify_endpoint(description: str, amount: float):
+    """Manually classify a transaction using AI (for testing)"""
+    try:
+        from ai_classifier import classify_with_ai
+        
+        category = classify_with_ai(description, amount)
+        
+        if category:
+            return {
+                "description": description,
+                "amount": amount,
+                "category": category,
+                "method": "ai"
+            }
+        else:
+            return {
+                "description": description,
+                "amount": amount,
+                "category": "Other",
+                "method": "fallback",
+                "error": "AI classification failed"
+            }
+    except ImportError:
+        raise HTTPException(status_code=501, detail="AI classifier not available")
