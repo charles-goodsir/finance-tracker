@@ -235,17 +235,18 @@ class CSVImportModule:
         self.results_text.append("💳 Transactions:")
         for tx in result["transactions"]:
             # Format date nicely
-            date_str = tx.get('date', '')
+            date_str = tx.get("date", "")
             if date_str:
                 from datetime import datetime
+
                 try:
-                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
                     formatted_date = dt.strftime("%d %b %Y")  # e.g., "04 Sep 2025"
                 except:
                     formatted_date = date_str[:10]  # Fallback to YYYY-MM-DD
             else:
                 formatted_date = "No date"
-            
+
             self.results_text.append(
                 f"[{formatted_date}] {tx['description']} → {tx['category']} (${tx['amount']})"
             )

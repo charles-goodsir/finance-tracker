@@ -61,7 +61,9 @@ class FinanceTrackerGUI(QMainWindow):
         # Dashboard tab
         self.dashboard_widget = QWidget()
         self.tab_widget.addTab(self.dashboard_widget, "📊 Dashboard")
-        self.dashboard_module = DashboardModule(self.dashboard_widget, self.db, self.api)
+        self.dashboard_module = DashboardModule(
+            self.dashboard_widget, self.db, self.api
+        )
 
         # Transactions tab
         self.transactions_widget = QWidget()

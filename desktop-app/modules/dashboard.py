@@ -181,25 +181,24 @@ class DashboardModule:
     def load_net_worth(self):
         """Load and display net worth from AWS"""
         import requests
-        
+
         if not self.api:
             return
-        
+
         try:
             response = requests.get(
-                f"{self.api.aws_api_url}/accounts/networth?user_id=user1",
-                timeout=10
+                f"{self.api.aws_api_url}/accounts/networth?user_id=user1", timeout=10
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
-                
+
                 print(f"💰 Net Worth: ${data['net_worth']:.2f}")
                 print(f"📈 Assets: ${data['total_assets']:.2f}")
                 print(f"📉 Liabilities: ${data['total_liabilities']:.2f}")
                 print("Account Balances:")
-                for account, balance in data['accounts'].items():
+                for account, balance in data["accounts"].items():
                     print(f"  {account}: ${balance:.2f}")
-                
+
         except Exception as e:
             print(f"Error loading net worth: {e}")
