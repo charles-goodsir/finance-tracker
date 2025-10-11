@@ -18,6 +18,7 @@ class AccountsModule:
         self.parent = parent_widget
         self.api = api_client
         self.balance_inputs = {}
+        self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout()

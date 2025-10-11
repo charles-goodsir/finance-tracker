@@ -242,6 +242,25 @@ Resources:
             Schedule: cron(0 6 1 * ? *)
             Description: "Process monthly recurring transactions"
 
+  MonthlyReminderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: handlers/
+      Handler: monthly_reminder.lambda_handler
+      Runtime: python3.11
+      Timeout: 30
+      Environment:
+        Variables:
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          TELEGRAM_CHAT_ID: !Ref TelegramChatId
+      Events:
+        MonthlySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 20 9 * ? *)
+            Description: Monthly finance tracking reminder on the 10th
+            Enabled: true
+
 Outputs:
   FinanceTrackerApi:
     Description: "API Gateway endpoint URL for Finance Tracker"
