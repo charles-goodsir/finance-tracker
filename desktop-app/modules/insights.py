@@ -31,50 +31,79 @@ class InsightsModule:
             print(f"Error loading insights: {e}")
 
     def update_with_real_data(self, data):
-        """Update UI with real insight data from AWS"""
+        """Update UI with enhanced insight data from AWS"""
         # Update health score
         score = data.get("health_score", 0)
         self.health_score.setText(f"Score: {score}/100")
 
-        # Update description based on score
+        # Update description with natural language summary
+        summary = data.get("summary", "")
+        if summary:
+            self.health_description.setText(summary)
+        else:
+            # Fallback to old description logic
+            if score >= 80:
+                description = "Excellent! You're managing your finances very well."
+            elif score >= 60:
+                description = "Good job! Keep up the good work."
+            else:
+                description = "There's room for improvement. Review your spending."
+            self.health_description.setText(description)
+        
+        # Color based on score
         if score >= 80:
-            description = "Excellent! You're managing your finances very well."
             color = "#4CAF50"
         elif score >= 60:
-            description = "Good job! Keep up the good work."
             color = "#FFC107"
         else:
-            description = "There's room for improvement. Review your spending."
             color = "#F44336"
-
         self.health_score.setStyleSheet(f"color: {color};")
-        self.health_description.setText(description)
 
-        # Update alerts
+        # Update alerts with new data
         self.alerts_list.clear()
         for alert in data.get("alerts", []):
             self.alerts_list.addItem(alert.get("message", ""))
+        
+        # If no alerts, show a friendly message
+        if not data.get("alerts"):
+            self.alerts_list.addItem("✅ Everything looks good!")
 
-        # Update suggestions based on category breakdown
+        # Update suggestions with actionable recommendations
         self.suggestions_list.clear()
-        category_breakdown = data.get("category_breakdown", {})
-
-        if category_breakdown:
-            top_category = max(category_breakdown.items(), key=lambda x: x[1])
-            self.suggestions_list.addItem(
-                f"💡 Your top spending category is {top_category[0]} at ${top_category[1]:.2f}"
-            )
-
-        savings_rate = data.get("savings_rate", 0)
-        if savings_rate < 20:
-            self.suggestions_list.addItem(
-                f"💰 Try to save at least 20% of your income (currently {savings_rate:.0f}%)"
-            )
-        else:
-            self.suggestions_list.addItem(
-                f"🎯 Great savings rate of {savings_rate:.0f}%!"
-            )
-            # Method content here...
+        
+        # Add suggestions from backend (with $ amounts and priorities)
+        suggestions = data.get("suggestions", [])
+        if suggestions:
+            for suggestion in suggestions:
+                priority = suggestion.get("priority", "medium")
+                emoji = "🔴" if priority == "high" else "🟡"
+                self.suggestions_list.addItem(f"{emoji} {suggestion.get('message', '')}")
+        
+        # Add trends information
+        trends = data.get("trends", {})
+        if trends:
+            spending_change = trends.get("spending_change_percent", 0)
+            if abs(spending_change) > 5:
+                direction = "increased" if spending_change > 0 else "decreased"
+                emoji = "📈" if spending_change > 0 else "📉"
+                self.suggestions_list.addItem(
+                    f"{emoji} Spending {direction} {abs(spending_change):.0f}% vs last month"
+                )
+        
+        # Add forecast information
+        forecast = data.get("forecast", {})
+        if forecast:
+            projected = forecast.get("projected_monthly_spending", 0)
+            days_remaining = forecast.get("days_remaining", 0)
+            if projected > 0 and days_remaining > 0:
+                self.suggestions_list.addItem(
+                    f"📊 Projected monthly spending: ${projected:.0f} ({days_remaining} days left)"
+                )
+        
+        # If no suggestions, show encouragement
+        if not suggestions and not trends and not forecast:
+            self.suggestions_list.addItem("💡 Keep tracking your expenses for personalized insights!")
+            self.suggestions_list.addItem("📈 Add more transactions to see trends and forecasts")
 
     def setup_ui(self):
         layout = QVBoxLayout()

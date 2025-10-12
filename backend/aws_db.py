@@ -198,110 +198,212 @@ def update_goal_progress(user_id: str, goal_id: str, current_amount: float) -> b
 
 
 def generate_insights(user_id: str) -> Dict:
-    """Generate financial insights from transaction data"""
+    """Generate enhanced financial insights with trends, forecasts, and actionable recommendations"""
     from datetime import datetime, timedelta
 
-    # Get transactions from last 30 days
-    thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    now = datetime.utcnow()
+    
+    # Define periods
+    thirty_days_ago = now - timedelta(days=30)
+    sixty_days_ago = now - timedelta(days=60)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0)
+    days_in_month = 30
+    days_elapsed = (now - month_start).days + 1
+    
+    # Get all transactions
     transactions = get_transactions(user_id, limit=1000)
-    recent_transactions = [
-        t for t in transactions if t.get("date", "") >= thirty_days_ago
-    ]
-
-    # ✅ EXCLUDE TRANSFERS - only count actual spending/income
-    actual_transactions = [t for t in recent_transactions if t.get('type') != 'transfer']
-
-    # Calculate insights (on actual transactions only)
-    total_spending = sum(
-        float(t["amount"]) for t in actual_transactions if float(t["amount"]) < 0
-    )
-    total_income = sum(
-        float(t["amount"]) for t in actual_transactions if float(t["amount"]) > 0
-    )
-
-    # Category breakdown (exclude transfers)
+    
+    # Exclude transfers, payments, cash withdrawals, credit card payments
+    excluded_categories = ['Transfers', 'Payment', 'Cash Withdrawal', 'Credit Card Payments']
+    
+    def filter_transactions(txs, start, end):
+        """Filter transactions by date and exclude certain categories"""
+        return [
+            t for t in txs
+            if start.isoformat() <= t.get("date", "")[:19] <= end.isoformat()
+            and t.get('category') not in excluded_categories
+        ]
+    
+    # Get current and previous period transactions
+    current_period = filter_transactions(transactions, thirty_days_ago, now)
+    previous_period = filter_transactions(transactions, sixty_days_ago, thirty_days_ago)
+    current_month = filter_transactions(transactions, month_start, now)
+    
+    # Calculate metrics for current period
+    current_spending = abs(sum(float(t["amount"]) for t in current_period if float(t["amount"]) < 0))
+    current_income = sum(float(t["amount"]) for t in current_period if float(t["amount"]) > 0)
+    current_savings = current_income - current_spending
+    current_savings_rate = (current_savings / current_income * 100) if current_income > 0 else 0
+    
+    # Calculate metrics for previous period
+    previous_spending = abs(sum(float(t["amount"]) for t in previous_period if float(t["amount"]) < 0))
+    previous_income = sum(float(t["amount"]) for t in previous_period if float(t["amount"]) > 0)
+    
+    # Calculate trends
+    spending_change = ((current_spending - previous_spending) / previous_spending * 100) if previous_spending > 0 else 0
+    income_change = ((current_income - previous_income) / previous_income * 100) if previous_income > 0 else 0
+    
+    # Category breakdown for current period
     category_spending = {}
-    for t in actual_transactions:
+    for t in current_period:
         if float(t["amount"]) < 0:
             cat = t.get("category", "Uncategorized")
-            category_spending[cat] = category_spending.get(cat, 0) + abs(
-                float(t["amount"])
-            )
-
-    # Find top spending category
-    top_category = (
-        max(category_spending.items(), key=lambda x: x[1])
-        if category_spending
-        else ("None", 0)
-    )
-
-    # Generate alerts
+            category_spending[cat] = category_spending.get(cat, 0) + abs(float(t["amount"]))
+    
+    # Previous period category breakdown for comparison
+    prev_category_spending = {}
+    for t in previous_period:
+        if float(t["amount"]) < 0:
+            cat = t.get("category", "Uncategorized")
+            prev_category_spending[cat] = prev_category_spending.get(cat, 0) + abs(float(t["amount"]))
+    
+    # Find top spending categories
+    top_categories = sorted(category_spending.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # Spending forecast for current month
+    month_spending = abs(sum(float(t["amount"]) for t in current_month if float(t["amount"]) < 0))
+    projected_monthly_spending = (month_spending / days_elapsed) * days_in_month if days_elapsed > 0 else 0
+    
+    # Generate alerts with trends
     alerts = []
-    if abs(total_spending) > total_income * 0.8:
-        alerts.append(
-            {
-                "type": "warning",
-                "message": f"⚠️ You spent ${abs(total_spending):.2f}, which is {(abs(total_spending)/total_income*100):.0f}% of your income",
-            }
-        )
-
-    if top_category[1] > abs(total_spending) * 0.3:
-        alerts.append(
-            {
+    suggestions = []
+    
+    # 1. Trend Analysis Alert
+    if abs(spending_change) > 10:
+        direction = "increased" if spending_change > 0 else "decreased"
+        emoji = "📈" if spending_change > 0 else "📉"
+        alert_type = "warning" if spending_change > 0 else "success"
+        alerts.append({
+            "type": alert_type,
+            "message": f"{emoji} Spending {direction} by {abs(spending_change):.0f}% vs last month (${abs(current_spending - previous_spending):.0f})"
+        })
+    
+    # 2. Spending Forecast
+    if projected_monthly_spending > current_spending * 1.1:
+        alerts.append({
+            "type": "info",
+            "message": f"📊 On track to spend ${projected_monthly_spending:.0f} this month ({days_in_month - days_elapsed} days left)"
+        })
+    
+    # 3. Spending vs Income
+    if current_spending > current_income * 0.8:
+        alerts.append({
+            "type": "warning",
+            "message": f"⚠️ You spent ${current_spending:.0f}, which is {(current_spending/current_income*100):.0f}% of your income"
+        })
+    
+    # 4. Savings Rate
+    if current_savings_rate > 20:
+        alerts.append({
+            "type": "success",
+            "message": f"🎯 Great savings rate of {current_savings_rate:.0f}%!"
+        })
+    elif current_savings_rate < 10:
+        target_savings = current_income * 0.15  # 15% target
+        need_to_save = target_savings - current_savings
+        alerts.append({
+            "type": "warning",
+            "message": f"💰 Save ${need_to_save:.0f} more to reach 15% savings rate (currently {current_savings_rate:.0f}%)"
+        })
+    
+    # 5. Actionable Recommendations (Top 3 categories)
+    for i, (category, amount) in enumerate(top_categories):
+        if amount > current_income * 0.15:  # If > 15% of income
+            # Check trend
+            prev_amount = prev_category_spending.get(category, 0)
+            cat_change = ((amount - prev_amount) / prev_amount * 100) if prev_amount > 0 else 0
+            
+            # Calculate potential savings
+            reduction_pct = 0.20  # 20% reduction
+            potential_monthly = amount * reduction_pct
+            potential_yearly = potential_monthly * 12
+            
+            priority = "high" if amount > current_income * 0.25 else "medium"
+            
+            # Include trend in suggestion
+            trend_text = ""
+            if abs(cat_change) > 10:
+                trend_emoji = "📈" if cat_change > 0 else "📉"
+                trend_text = f" ({trend_emoji} {abs(cat_change):.0f}% vs last month)"
+            
+            suggestions.append({
+                "category": category,
+                "current_spending": float(amount),
+                "previous_spending": float(prev_amount),
+                "change_percent": float(cat_change),
+                "priority": priority,
+                "potential_monthly_savings": float(potential_monthly),
+                "potential_yearly_savings": float(potential_yearly),
+                "message": f"💡 Cut {category} by 20% to save ${potential_monthly:.0f}/month (${potential_yearly:.0f}/year){trend_text}"
+            })
+    
+    # 6. Category-specific insights
+    for category, amount in top_categories[:1]:  # Top category only
+        if amount > current_spending * 0.3:
+            alerts.append({
                 "type": "info",
-                "message": f"🍽️ {top_category[0]} is your largest expense at ${top_category[1]:.2f}",
-            }
-        )
-
-    # Savings rate
-    savings_rate = (
-        ((total_income + total_spending) / total_income * 100)
-        if total_income > 0
-        else 0
-    )
-
-    if savings_rate > 20:
-        alerts.append(
-            {
-                "type": "success",
-                "message": f"🎯 Great job! Your savings rate is {savings_rate:.0f}%",
-            }
-        )
-    elif savings_rate < 10:
-        alerts.append(
-            {
-                "type": "warning",
-                "message": f"💰 Try to save more! Current savings rate: {savings_rate:.0f}%",
-            }
-        )
-
-    # Financial health score (0-100)
+                "message": f"🔍 {category} is your largest expense at ${amount:.0f}"
+            })
+    
+    # Generate natural language summary
+    if current_savings_rate > 20:
+        tone = "You're doing great!"
+    elif current_savings_rate > 10:
+        tone = "You're on the right track."
+    elif current_savings_rate > 0:
+        tone = "There's room for improvement."
+    else:
+        tone = "You're spending more than you earn."
+    
+    top_cat_name = top_categories[0][0] if top_categories else "None"
+    
+    summary = f"{tone} Over the last 30 days, you earned ${current_income:.0f} and spent ${current_spending:.0f}, "
+    summary += f"saving {current_savings_rate:.0f}% of your income. "
+    
+    if spending_change != 0:
+        direction = "up" if spending_change > 0 else "down"
+        summary += f"Spending is {direction} {abs(spending_change):.0f}% from last month. "
+    
+    summary += f"Your biggest expense was {top_cat_name}."
+    
+    # Financial health score (enhanced)
     health_score = min(
         100,
         max(
             0,
-            (
-                (savings_rate * 2)  # Savings rate worth 40%
-                + (
-                    30 if total_income > abs(total_spending) else 0
-                )  # Income > expenses worth 30%
-                + (
-                    30 if len(actual_transactions) > 5 else len(actual_transactions) * 6
-                )  # Transaction tracking worth 30%
+            int(
+                (current_savings_rate * 2)  # Savings rate worth 40 points
+                + (30 if current_income > current_spending else 10)  # Income > expenses worth 30 points
+                + (20 if len(current_period) > 10 else len(current_period) * 2)  # Transaction tracking worth 20 points
+                + (10 if spending_change < 0 else 0)  # Bonus for reducing spending
             ),
         ),
     )
-
+    
     return {
         "user_id": user_id,
-        "total_income": float(total_income),
-        "total_spending": float(abs(total_spending)),
-        "savings_rate": float(savings_rate),
+        "total_income": float(current_income),
+        "total_spending": float(current_spending),
+        "savings_rate": float(current_savings_rate),
         "health_score": int(health_score),
         "alerts": alerts,
-        "top_category": {"name": top_category[0], "amount": float(top_category[1])},
+        "suggestions": suggestions,
+        "summary": summary,
+        "top_category": {"name": top_cat_name, "amount": float(top_categories[0][1]) if top_categories else 0},
         "category_breakdown": {k: float(v) for k, v in category_spending.items()},
-        "generated_at": datetime.utcnow().isoformat(),
+        "trends": {
+            "spending_change_percent": float(spending_change),
+            "income_change_percent": float(income_change),
+            "previous_spending": float(previous_spending),
+            "previous_income": float(previous_income)
+        },
+        "forecast": {
+            "projected_monthly_spending": float(projected_monthly_spending),
+            "current_month_spending": float(month_spending),
+            "days_elapsed": days_elapsed,
+            "days_remaining": days_in_month - days_elapsed
+        },
+        "generated_at": now.isoformat(),
     }
 
 
