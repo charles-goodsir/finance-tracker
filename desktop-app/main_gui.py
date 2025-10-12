@@ -68,7 +68,7 @@ class FinanceTrackerGUI(QMainWindow):
         # Transactions tab
         self.transactions_widget = QWidget()
         self.tab_widget.addTab(self.transactions_widget, "💳 Transactions")
-        self.transactions_module = TransactionsModule(self.transactions_widget, self.db)
+        self.transactions_module = TransactionsModule(self.transactions_widget, self.db, self.api)
 
         # CSV Import tab
         self.csv_widget = QWidget()

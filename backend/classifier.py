@@ -20,6 +20,22 @@ classification_rules = {
         "card payment",
         "payment to card",
     ],
+    "Payment": [
+        "errington",
+        "the misso",
+        "goodsir",
+        "partner payment",
+        "personal payment",
+        "sam",
+    ],
+    "Cash Withdrawal": [
+        "atm",
+        "atm transaction",
+        "cash withdrawal",
+        "wbc atm",
+        "bnz atm",
+        "anz atm",
+    ],
     "Groceries": [
         "woolworths",
         "pak n save",
@@ -71,7 +87,14 @@ classification_rules = {
         "amazon",
         "cursor",
         "ableton",
-        "flat account"
+        "flat account",
+        "2degrees",
+        "vodafone",
+        "spark",
+        "debitsuccess",
+        "direct debit",
+        "bill payment",
+        "automatic payment"
     ],
     "Shopping": [
         "the warehouse",
@@ -85,7 +108,7 @@ classification_rules = {
     ],
     "Entertainment": ["hoyts", "movie", "cinema", "f1.com", "sports", "gym"],
     "Healthcare": ["pharmacy", "chemist", "doctor", "dentist", "medical", "vape"],
-    "Insurance": ["state insurance", "insurance", "cover"],
+    "Insurance": ["state insurance", "insurance", "cover", "southern cross"],
     "Travel": ["air new zealand", "air new z", "flight", "travel"],
 }
 

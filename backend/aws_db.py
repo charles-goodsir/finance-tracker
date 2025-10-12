@@ -63,29 +63,32 @@ def init_db():
 
 
 def add_transaction(
-    user_id, amount, category, description, tx_type, tags, frequency, account="main"
+    user_id, amount, category, description, tx_type, tags, frequency, account="main", date=None
 ):
-    """Add transaction to DynamoDB with account field"""
+    """Add transaction to DynamoDB with account field and optional date"""
     import uuid
     from datetime import datetime
     from decimal import Decimal
 
     transaction_id = str(uuid.uuid4())
     timestamp = datetime.utcnow().isoformat()
+    
+    # Use provided date or default to current timestamp
+    transaction_date = date if date else timestamp
 
     transactions_table.put_item(
         Item={
             "user_id": user_id,
             "transaction_id": transaction_id,
-            "date": timestamp,
+            "date": transaction_date,  # Use actual transaction date
             "amount": Decimal(str(amount)),
             "category": category,
             "description": description,
             "type": tx_type,
             "tags": tags,
             "frequency": frequency,
-            "account": account,  # ADD THIS LINE
-            "created_at": timestamp,
+            "account": account,
+            "created_at": timestamp,  # Keep track of when it was added to DB
         }
     )
     return transaction_id
@@ -489,15 +492,20 @@ def calculate_period_summary(user_id: str, start_date: str, end_date: str) -> Di
     start_snapshot = get_balance_snapshot(user_id, start_date)
     end_snapshot = get_balance_snapshot(user_id, end_date)
     
-    # Get transactions in period (excluding transfers)
+    # Get transactions in period
+    # Include ALL accounts (savings, bills, main, credit) for transaction-based calculation
     transactions = get_transactions(user_id, limit=10000)
+    
+    # Categories to exclude from spending/income calculations
+    excluded_categories = ['Transfers', 'Payment', 'Cash Withdrawal', 'Credit Card Payments']
+    
     period_transactions = [
         t for t in transactions
-        if start_date <= t.get('date', '') <= end_date
-        and t.get('type') != 'transfer'
+        if start_date <= t.get('date', '')[:10] <= end_date  # Extract date part only (YYYY-MM-DD)
+        and t.get('category') not in excluded_categories
     ]
     
-    # Calculate transaction-based
+    # Calculate transaction-based (including credit card transactions)
     total_income = sum(
         float(t['amount']) for t in period_transactions
         if float(t['amount']) > 0

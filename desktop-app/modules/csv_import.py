@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QColor
+import requests
 
 
 class CSVImportModule:
@@ -150,22 +151,39 @@ class CSVImportModule:
         self.import_button.clicked.connect(self.import_csv)
         layout.addWidget(self.import_button)
 
-        # Results text area
-        self.results_text = QTextEdit()
-        self.results_text.setReadOnly(True)
-        self.results_text.setStyleSheet(
-            """
-            QTextEdit {
-                background-color: #666;
-                border: 2px solid #666;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-            }
-        """
-        )
-        layout.addWidget(self.results_text)
+        # Note: Results area is dynamically created when importing
+        # We don't create a results_text widget anymore since we use tables
+
+    def load_categories(self):
+        """Load available categories from API"""
+        # Define comprehensive fallback categories
+        fallback_categories = [
+            "Income", "Payment", "Cash Withdrawal", "Groceries", "Dining Out", 
+            "Transportation", "Bills & Utilities", "Entertainment", "Healthcare", 
+            "Shopping", "Insurance", "Travel", "Transfers",
+            "Credit Card Payments", "Uncategorized"
+        ]
+        
+        try:
+            if hasattr(self.api, 'aws_api_url'):
+                response = requests.get(
+                    f"{self.api.aws_api_url}/categories",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    api_categories = [cat['name'] for cat in data.get('categories', [])]
+                    
+                    # If API returns categories, merge with fallback to ensure we have all
+                    if api_categories:
+                        # Combine API categories with fallback, removing duplicates
+                        all_categories = list(dict.fromkeys(api_categories + fallback_categories))
+                        return all_categories
+        except Exception as e:
+            print(f"Failed to load categories: {e}")
+        
+        # Use fallback categories
+        return fallback_categories
 
     def browse_file(self):
         """Browse for CSV file"""
@@ -223,41 +241,280 @@ class CSVImportModule:
         self.import_button.setEnabled(True)
 
     def show_import_results(self, result):
-        """Show import results"""
-        self.results_text.clear()
-
+        """Show import results in an interactive table"""
+        from datetime import datetime
+        
+        # Clear previous results
+        if hasattr(self, 'results_text') and self.results_text is not None:
+            try:
+                self.results_text.setParent(None)
+                self.results_text.deleteLater()
+            except:
+                pass
+            self.results_text = None
+        
+        if hasattr(self, 'results_table') and self.results_table is not None:
+            try:
+                self.results_table.setParent(None)
+                self.results_table.deleteLater()
+            except:
+                pass
+            self.results_table = None
+        
+        if hasattr(self, 'summary_label') and self.summary_label is not None:
+            try:
+                self.summary_label.setParent(None)
+                self.summary_label.deleteLater()
+            except:
+                pass
+            self.summary_label = None
+        
+        if hasattr(self, 'filter_frame') and self.filter_frame is not None:
+            try:
+                self.filter_frame.setParent(None)
+                self.filter_frame.deleteLater()
+            except:
+                pass
+            self.filter_frame = None
+        
+        # Store pending transactions
+        self.pending_transactions = result["transactions"]
         summary = result["summary"]
-        self.results_text.append("📊 Import Results:")
-        self.results_text.append(f"Total: {summary['total']}")
-        self.results_text.append(f"Auto-classified: {summary['auto-classified']}")
-        self.results_text.append(f"Needs Review: {summary['needs_review']}\n")
-
-        self.results_text.append("💳 Transactions:")
-        for tx in result["transactions"]:
-            # Format date nicely
+        
+        # Debug: Check if account field is present
+        if self.pending_transactions:
+            print(f"DEBUG: First transaction account field: {self.pending_transactions[0].get('account', 'MISSING')}")
+        
+        # Recalculate summary based on actual frontend logic
+        total = len(self.pending_transactions)
+        needs_review_count = 0
+        auto_classified_count = 0
+        
+        for tx in self.pending_transactions:
+            # Get confidence from classification object or top level
+            confidence = tx.get("classification", {}).get("confidence", tx.get("confidence", 0.5))
+            if confidence < 0.7 or tx.get("category") == "Uncategorized":
+                needs_review_count += 1
+            else:
+                auto_classified_count += 1
+        
+        # Create summary label
+        self.summary_label = QLabel()
+        self.summary_label.setStyleSheet("""
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 10px;
+            background-color: #2d3748;
+            border-radius: 5px;
+            margin: 10px 0px;
+        """)
+        
+        summary_text = f"📊 Import Results: Total: {total} | ✅ Auto-classified: {auto_classified_count} | ⚠️ Needs Review: {needs_review_count}"
+        self.summary_label.setText(summary_text)
+        
+        # Insert summary after account selector
+        layout = self.parent.layout()
+        layout.insertWidget(3, self.summary_label)
+        
+        # Load categories for dropdowns
+        self.categories = self.load_categories()
+        print(f"📋 Loaded {len(self.categories)} categories: {self.categories}")
+        
+        # Create interactive table
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(6)
+        self.results_table.setHorizontalHeaderLabels([
+            "Status", "Date", "Description", "Amount", "Category", "Confidence"
+        ])
+        self.results_table.setRowCount(len(self.pending_transactions))
+        
+        # Set row height to accommodate dropdown boxes
+        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        
+        # Style the table
+        self.results_table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #4a5568;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                color: #1a202c;
+            }
+            QHeaderView::section {
+                background-color: #4a5568;
+                color: white;
+                padding: 10px;
+                font-weight: bold;
+                border: none;
+            }
+        """)
+        
+        # Set column widths with stretch for Category column
+        header = self.results_table.horizontalHeader()
+        self.results_table.setColumnWidth(0, 60)   # Status
+        self.results_table.setColumnWidth(1, 100)  # Date
+        self.results_table.setColumnWidth(2, 250)  # Description
+        self.results_table.setColumnWidth(3, 100)  # Amount
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)  # Category stretches
+        self.results_table.setColumnWidth(5, 100)  # Confidence
+        
+        # Populate table
+        print(f"📊 Processing {len(self.pending_transactions)} transactions...")
+        for row_idx, tx in enumerate(self.pending_transactions):
+            if row_idx < 3:  # Debug first 3 transactions
+                classification = tx.get('classification', {})
+                print(f"  Transaction {row_idx}: category='{tx.get('category')}', confidence={classification.get('confidence')}, reason='{classification.get('reason')}'")
+            # Format date
             date_str = tx.get("date", "")
             if date_str:
-                from datetime import datetime
-
                 try:
                     dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                    formatted_date = dt.strftime("%d %b %Y")  # e.g., "04 Sep 2025"
+                    formatted_date = dt.strftime("%d %b")
                 except:
-                    formatted_date = date_str[:10]  # Fallback to YYYY-MM-DD
+                    formatted_date = date_str[:10]
             else:
                 formatted_date = "No date"
-
-            self.results_text.append(
-                f"[{formatted_date}] {tx['description']} → {tx['category']} (${tx['amount']})"
+            
+            # Get confidence from classification object or top level (default 0.5 if not provided)
+            confidence = tx.get("classification", {}).get("confidence", tx.get("confidence", 0.5))
+            needs_review_flag = confidence < 0.7 or tx.get("category") == "Uncategorized"
+            
+            # Status indicator
+            status_item = QTableWidgetItem()
+            if needs_review_flag:
+                status_item.setText("⚠️")
+                status_item.setBackground(QColor(255, 243, 205))  # Light yellow
+            else:
+                status_item.setText("✅")
+                status_item.setBackground(QColor(209, 250, 229))  # Light green
+            status_item.setFlags(Qt.ItemFlag.ItemIsEnabled)  # Not editable
+            self.results_table.setItem(row_idx, 0, status_item)
+            
+            # Date
+            date_item = QTableWidgetItem(formatted_date)
+            date_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            if needs_review_flag:
+                date_item.setBackground(QColor(255, 243, 205))
+            self.results_table.setItem(row_idx, 1, date_item)
+            
+            # Description
+            desc_item = QTableWidgetItem(tx["description"][:50])
+            desc_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            if needs_review_flag:
+                desc_item.setBackground(QColor(255, 243, 205))
+            self.results_table.setItem(row_idx, 2, desc_item)
+            
+            # Amount
+            amount_item = QTableWidgetItem(f"${tx['amount']}")
+            amount_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            if needs_review_flag:
+                amount_item.setBackground(QColor(255, 243, 205))
+            self.results_table.setItem(row_idx, 3, amount_item)
+            
+            # Category dropdown
+            category_combo = QComboBox()
+            category_combo.addItems(self.categories)
+            current_category = tx.get("category", "Uncategorized")
+            
+            # Try to find matching category (case-insensitive)
+            category_index = -1
+            for i, cat in enumerate(self.categories):
+                if cat.lower() == current_category.lower():
+                    category_index = i
+                    break
+            
+            if category_index >= 0:
+                category_combo.setCurrentIndex(category_index)
+                if row_idx < 3:  # Debug first 3
+                    print(f"  Row {row_idx}: Set dropdown to index {category_index} = '{self.categories[category_index]}'")
+            else:
+                # Category not found, try exact match as fallback
+                category_combo.setCurrentText(current_category)
+                print(f"Warning: Category '{current_category}' not found in dropdown list. Available: {self.categories}")
+            category_combo.setProperty("row", row_idx)  # Store row index
+            # Use lambda to pass both the new category and row index
+            category_combo.currentTextChanged.connect(
+                lambda new_cat, r=row_idx, combo=category_combo: self.on_category_changed(new_cat, r, combo)
             )
-
-        self.pending_transactions = result["transactions"]
-
-        # Add commit button if not exists
+            
+            # Simple styling - just clear, readable text
+            category_combo.setStyleSheet("""
+                QComboBox {
+                    padding: 5px;
+                    color: #1a202c;
+                    font-size: 14px;
+                    background-color: white;
+                    border: 1px solid #cbd5e0;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: white;
+                    color: #1a202c;
+                    selection-background-color: #4299e1;
+                }
+            """)
+            
+            self.results_table.setCellWidget(row_idx, 4, category_combo)
+            
+            # Confidence
+            conf_text = f"{int(confidence * 100)}%"
+            if needs_review_flag:
+                conf_text += " ⚠️"
+            conf_item = QTableWidgetItem(conf_text)
+            conf_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            if needs_review_flag:
+                conf_item.setBackground(QColor(255, 243, 205))
+            self.results_table.setItem(row_idx, 5, conf_item)
+        
+        # Add filter buttons
+        self.filter_frame = QFrame()
+        filter_layout = QHBoxLayout()
+        self.filter_frame.setLayout(filter_layout)
+        
+        show_all_btn = QPushButton("📋 Show All")
+        show_all_btn.clicked.connect(lambda: self.filter_table("all"))
+        show_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        
+        show_review_btn = QPushButton("⚠️ Needs Review Only")
+        show_review_btn.clicked.connect(lambda: self.filter_table("review"))
+        show_review_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffc107;
+                color: #1a202c;
+                padding: 8px 16px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e0a800;
+            }
+        """)
+        
+        filter_layout.addWidget(show_all_btn)
+        filter_layout.addWidget(show_review_btn)
+        filter_layout.addStretch()
+        
+        layout.insertWidget(4, self.filter_frame)
+        layout.insertWidget(5, self.results_table)
+        
+        # Show/enable commit button
         if not hasattr(self, "commit_button"):
             self.commit_button = QPushButton("💾 Commit Transactions")
-            self.commit_button.setStyleSheet(
-                """
+            self.commit_button.setStyleSheet("""
                 QPushButton {
                     background-color: #dc3545;
                     color: white;
@@ -270,10 +527,40 @@ class CSVImportModule:
                 QPushButton:hover {
                     background-color: #c82333;
                 }
-            """
-            )
+            """)
             self.commit_button.clicked.connect(self.commit_transactions)
-            self.parent.layout().addWidget(self.commit_button)
+            layout.addWidget(self.commit_button)
+        else:
+            # Re-enable and show the button for subsequent imports
+            self.commit_button.setEnabled(True)
+            self.commit_button.setVisible(True)
+
+    def on_category_changed(self, new_category, row, combo):
+        """Handle category dropdown change"""
+        # Update the transaction data
+        self.pending_transactions[row]["category"] = new_category
+        
+        # Update status column to show it's been reviewed
+        status_item = self.results_table.item(row, 0)
+        status_item.setText("✅")
+        status_item.setBackground(QColor(209, 250, 229))
+        
+        # Update other cells in the row to green to show it's been reviewed
+        for col in [1, 2, 3, 5]:
+            item = self.results_table.item(row, col)
+            if item:
+                item.setBackground(QColor(209, 250, 229))
+
+    def filter_table(self, filter_type):
+        """Filter table to show all or only needs review"""
+        for row in range(self.results_table.rowCount()):
+            status_item = self.results_table.item(row, 0)
+            if filter_type == "all":
+                self.results_table.setRowHidden(row, False)
+            elif filter_type == "review":
+                # Show only rows with ⚠️
+                show_row = status_item.text() == "⚠️"
+                self.results_table.setRowHidden(row, not show_row)
 
     def commit_transactions(self):
         """Commit pending transactions to database"""
@@ -323,11 +610,34 @@ class CSVImportModule:
                     f"✅ Committed {result['saved']} transactions!\n"
                     f"Failed: {len(result['failed'])}",
                 )
-                self.results_text.append(
-                    f"\n✅ Committed {result['saved']} transactions!"
-                )
+                # Clear the pending transactions and hide UI elements
                 self.pending_transactions = []
-                self.commit_button.hide()
+                if hasattr(self, 'commit_button') and self.commit_button is not None:
+                    try:
+                        self.commit_button.hide()
+                    except:
+                        pass
+                if hasattr(self, 'results_table') and self.results_table is not None:
+                    try:
+                        self.results_table.setParent(None)
+                        self.results_table.deleteLater()
+                    except:
+                        pass
+                    self.results_table = None
+                if hasattr(self, 'filter_frame') and self.filter_frame is not None:
+                    try:
+                        self.filter_frame.setParent(None)
+                        self.filter_frame.deleteLater()
+                    except:
+                        pass
+                    self.filter_frame = None
+                if hasattr(self, 'summary_label') and self.summary_label is not None:
+                    try:
+                        self.summary_label.setParent(None)
+                        self.summary_label.deleteLater()
+                    except:
+                        pass
+                    self.summary_label = None
             else:
                 QMessageBox.critical(
                     self.parent, "Error", f"Commit failed: {response.text}"

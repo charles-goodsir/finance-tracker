@@ -5,9 +5,10 @@ from .widgets import StyledTableWidget
 
 
 class TransactionsModule:
-    def __init__(self, parent_widget, db_manager):
+    def __init__(self, parent_widget, db_manager, api_client=None):
         self.parent = parent_widget
         self.db = db_manager
+        self.api = api_client
         self.setup_ui()
 
     def setup_ui(self):
@@ -112,10 +113,31 @@ class TransactionsModule:
         layout.addLayout(button_layout)
 
     def load_transactions(self):
-        """Load transactions from database"""
-        transactions = self.db.get_local_transactions()
-        self.display_transactions(transactions)
-        self.sync_status_label.setText(f"✅ Loaded {len(transactions)} transactions")
+        """Load transactions from AWS"""
+        import requests
+        
+        try:
+            # Load from AWS API instead of local DB
+            if hasattr(self, 'api') and self.api:
+                response = requests.get(
+                    f"{self.api.aws_api_url}/transactions?user_id=user1&limit=500",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    transactions = data.get('items', [])
+                    self.display_transactions(transactions)
+                    self.sync_status_label.setText(f"✅ Loaded {len(transactions)} transactions from AWS")
+                else:
+                    self.sync_status_label.setText(f"❌ Error loading from AWS")
+            else:
+                # Fallback to local DB if no API client
+                transactions = self.db.get_local_transactions()
+                self.display_transactions(transactions)
+                self.sync_status_label.setText(f"✅ Loaded {len(transactions)} local transactions")
+        except Exception as e:
+            self.sync_status_label.setText(f"❌ Error: {str(e)}")
+            print(f"Error loading transactions: {e}")
 
     def display_transactions(self, transactions):
         """Display transactions in the table"""

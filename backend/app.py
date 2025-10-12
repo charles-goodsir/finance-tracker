@@ -598,7 +598,8 @@ def commit_bulk(body: BulkCommitIn):
                         tx.type,
                         tx.tags,
                         tx.frequency,
-                        tx.account,  # ADD THIS LINE
+                        tx.account,
+                        tx.date,  # Pass the actual transaction date
                     )
                     saved += 1
                 except Exception as e:

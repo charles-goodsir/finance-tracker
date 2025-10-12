@@ -36,6 +36,8 @@ class AccountsModule:
             "Set your current account balances to track net worth accurately"
         )
         instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        instructions.setWordWrap(True)
+        instructions.setStyleSheet("color: #a0aec0; padding: 5px; font-size: 13px;")
         layout.addWidget(instructions)
 
         # Account balance inputs
@@ -61,6 +63,7 @@ class AccountsModule:
             account_label.setStyleSheet(
                 f"color: white; font-weight: bold; font-size: 14px;"
             )
+            account_label.setMinimumWidth(150)  # Ensure minimum space for text
             card_layout.addWidget(account_label)
 
             card_layout.addStretch()
@@ -68,7 +71,8 @@ class AccountsModule:
             # Balance input
             balance_input = QLineEdit()
             balance_input.setPlaceholderText("$0.00")
-            balance_input.setFixedWidth(150)
+            balance_input.setFixedWidth(200)  # Fixed width so it doesn't shrink
+            balance_input.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             balance_input.setStyleSheet(
                 """
                 QLineEdit {
@@ -86,7 +90,8 @@ class AccountsModule:
 
             # Save button
             save_btn = QPushButton("Save")
-            save_btn.setFixedWidth(80)
+            save_btn.setFixedWidth(100)
+            save_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             save_btn.setStyleSheet(
                 """
                 QPushButton {
@@ -119,7 +124,8 @@ class AccountsModule:
         snapshot_instructions = QLabel(
             "Save snapshots at month-end to enable accurate savings tracking"
         )
-        snapshot_instructions.setStyleSheet("color: #a0aec0; padding: 5px;")
+        snapshot_instructions.setStyleSheet("color: #a0aec0; padding: 5px; font-size: 13px;")
+        snapshot_instructions.setWordWrap(True)
         layout.addWidget(snapshot_instructions)
 
         # Snapshot control panel

@@ -40,6 +40,15 @@ class DatabaseManager:
                     )
                 """
                 )
+                
+                # Migration: Add account column if it doesn't exist
+                try:
+                    cursor.execute("SELECT account FROM transactions LIMIT 1")
+                except sqlite3.OperationalError:
+                    # Column doesn't exist, add it
+                    print("Migrating database: adding account column...")
+                    cursor.execute("ALTER TABLE transactions ADD COLUMN account TEXT DEFAULT 'main'")
+                
                 self.local_conn.commit()
                 self.ready = True
                 print("Database initialized successfully")
@@ -60,7 +69,7 @@ class DatabaseManager:
             cursor = self.local_conn.cursor()
             cursor.execute(
                 """
-                SELECT date, description, amount, category, type 
+                SELECT date, description, amount, category, type, account 
                 FROM transactions 
                 ORDER BY date DESC
             """
@@ -75,6 +84,7 @@ class DatabaseManager:
                         "amount": row[2],
                         "category": row[3],
                         "type": row[4],
+                        "account": row[5] if len(row) > 5 else "main",
                     }
                 )
             return transactions
@@ -92,8 +102,8 @@ class DatabaseManager:
             for tx in transactions:
                 cursor.execute(
                     """
-                    INSERT INTO transactions (date, amount, description, category, type, synced)
-                    VALUES (?, ?, ?, ?, ?, 0)
+                    INSERT INTO transactions (date, amount, description, category, type, account, synced)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
                 """,
                     (
                         tx["date"],
@@ -101,6 +111,7 @@ class DatabaseManager:
                         tx["description"],
                         tx["category"],
                         tx["type"],
+                        tx.get("account", "main"),
                     ),
                 )
             self.local_conn.commit()
