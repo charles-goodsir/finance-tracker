@@ -15,11 +15,16 @@ Requirements:
 
 import requests
 import json
+import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configuration
-API_URL = "https://your-api-url.amazonaws.com"  # Replace with your actual API URL
-USER_ID = "user1"
+API_URL = os.getenv("AWS_API_URL")
+USER_ID = os.getenv("USER_ID")
 
 
 def scan_existing_transactions():

@@ -1,9 +1,14 @@
 import sys
+import os
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QPalette, QColor
+from dotenv import load_dotenv
 from database import DatabaseManager
 from api_client import APIClient
+
+# Load environment variables
+load_dotenv()
 from modules.dashboard import DashboardModule
 from modules.transactions import TransactionsModule
 from modules.csv_import import CSVImportModule
@@ -19,12 +24,9 @@ class FinanceTrackerGUI(QMainWindow):
         self.setGeometry(100, 100, 1200, 800)
 
         # Initialize modules
-        self.db = DatabaseManager(
-            "https://35kdl5sqm4.execute-api.ap-southeast-2.amazonaws.com/Prod"
-        )
-        self.api = APIClient(
-            "https://35kdl5sqm4.execute-api.ap-southeast-2.amazonaws.com/Prod"
-        )
+        aws_api_url = os.getenv("AWS_API_URL")
+        self.db = DatabaseManager(aws_api_url)
+        self.api = APIClient(aws_api_url)
 
         # Create UI
         self.create_widgets()
