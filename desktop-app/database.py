@@ -40,15 +40,17 @@ class DatabaseManager:
                     )
                 """
                 )
-                
+
                 # Migration: Add account column if it doesn't exist
                 try:
                     cursor.execute("SELECT account FROM transactions LIMIT 1")
                 except sqlite3.OperationalError:
                     # Column doesn't exist, add it
                     print("Migrating database: adding account column...")
-                    cursor.execute("ALTER TABLE transactions ADD COLUMN account TEXT DEFAULT 'main'")
-                
+                    cursor.execute(
+                        "ALTER TABLE transactions ADD COLUMN account TEXT DEFAULT 'main'"
+                    )
+
                 self.local_conn.commit()
                 self.ready = True
                 print("Database initialized successfully")

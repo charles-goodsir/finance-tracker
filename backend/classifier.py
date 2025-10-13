@@ -3,11 +3,14 @@ from typing import Optional, Tuple
 # Import AI classifier (optional dependency)
 try:
     from ai_classifier import classify_with_ai, is_ai_enabled
+
     AI_AVAILABLE = True
 except ImportError:
     AI_AVAILABLE = False
+
     def classify_with_ai(description: str, amount: float) -> Optional[str]:
         return None
+
     def is_ai_enabled() -> bool:
         return False
 
@@ -94,7 +97,7 @@ classification_rules = {
         "debitsuccess",
         "direct debit",
         "bill payment",
-        "automatic payment"
+        "automatic payment",
     ],
     "Shopping": [
         "the warehouse",
@@ -119,13 +122,13 @@ def classify(description, amount, use_ai: bool = True, user_id: str = "user1"):
     1. Try learning patterns first (user corrections)
     2. Try rule-based classification (fast & free)
     3. If uncertain, use AI as fallback (if enabled)
-    
+
     Args:
         description: Transaction description
         amount: Transaction amount
         use_ai: Enable AI fallback for uncertain cases
         user_id: User ID for learning patterns
-    
+
     Returns: (category, confidence, reason)
     """
     description_lower = description.lower().strip()
@@ -133,7 +136,10 @@ def classify(description, amount, use_ai: bool = True, user_id: str = "user1"):
     # Step 1: Try learning patterns first (user corrections)
     try:
         from aws_db import apply_learning_to_classification
-        learned_category = apply_learning_to_classification(user_id, description, amount)
+
+        learned_category = apply_learning_to_classification(
+            user_id, description, amount
+        )
         if learned_category:
             return learned_category, 0.85, "Learned from user corrections"
     except Exception as e:

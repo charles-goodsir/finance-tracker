@@ -158,30 +158,42 @@ class CSVImportModule:
         """Load available categories from API"""
         # Define comprehensive fallback categories
         fallback_categories = [
-            "Income", "Payment", "Cash Withdrawal", "Groceries", "Dining Out", 
-            "Transportation", "Bills & Utilities", "Entertainment", "Healthcare", 
-            "Shopping", "Insurance", "Travel", "Transfers",
-            "Credit Card Payments", "Uncategorized"
+            "Income",
+            "Payment",
+            "Cash Withdrawal",
+            "Groceries",
+            "Dining Out",
+            "Transportation",
+            "Bills & Utilities",
+            "Entertainment",
+            "Healthcare",
+            "Shopping",
+            "Insurance",
+            "Travel",
+            "Transfers",
+            "Credit Card Payments",
+            "Uncategorized",
         ]
-        
+
         try:
-            if hasattr(self.api, 'aws_api_url'):
+            if hasattr(self.api, "aws_api_url"):
                 response = requests.get(
-                    f"{self.api.aws_api_url}/categories",
-                    timeout=10
+                    f"{self.api.aws_api_url}/categories", timeout=10
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    api_categories = [cat['name'] for cat in data.get('categories', [])]
-                    
+                    api_categories = [cat["name"] for cat in data.get("categories", [])]
+
                     # If API returns categories, merge with fallback to ensure we have all
                     if api_categories:
                         # Combine API categories with fallback, removing duplicates
-                        all_categories = list(dict.fromkeys(api_categories + fallback_categories))
+                        all_categories = list(
+                            dict.fromkeys(api_categories + fallback_categories)
+                        )
                         return all_categories
         except Exception as e:
             print(f"Failed to load categories: {e}")
-        
+
         # Use fallback categories
         return fallback_categories
 
@@ -235,15 +247,13 @@ class CSVImportModule:
         """Handle import completion"""
         if success:
             # Send Telegram notification for CSV import
-            if self.api and hasattr(self.api, 'telegram'):
+            if self.api and hasattr(self.api, "telegram"):
                 summary = result.get("summary", {})
                 account = self.account_selector.currentData()
                 self.api.telegram.notify_csv_import(
-                    summary.get("total", 0), 
-                    summary.get("auto-classified", 0),
-                    account
+                    summary.get("total", 0), summary.get("auto-classified", 0), account
                 )
-            
+
             self.show_import_results(result)
         else:
             QMessageBox.critical(self.parent, "Error", result)
@@ -253,64 +263,69 @@ class CSVImportModule:
     def show_import_results(self, result):
         """Show import results in an interactive table"""
         from datetime import datetime
-        
+
         # Clear previous results
-        if hasattr(self, 'results_text') and self.results_text is not None:
+        if hasattr(self, "results_text") and self.results_text is not None:
             try:
                 self.results_text.setParent(None)
                 self.results_text.deleteLater()
             except:
                 pass
             self.results_text = None
-        
-        if hasattr(self, 'results_table') and self.results_table is not None:
+
+        if hasattr(self, "results_table") and self.results_table is not None:
             try:
                 self.results_table.setParent(None)
                 self.results_table.deleteLater()
             except:
                 pass
             self.results_table = None
-        
-        if hasattr(self, 'summary_label') and self.summary_label is not None:
+
+        if hasattr(self, "summary_label") and self.summary_label is not None:
             try:
                 self.summary_label.setParent(None)
                 self.summary_label.deleteLater()
             except:
                 pass
             self.summary_label = None
-        
-        if hasattr(self, 'filter_frame') and self.filter_frame is not None:
+
+        if hasattr(self, "filter_frame") and self.filter_frame is not None:
             try:
                 self.filter_frame.setParent(None)
                 self.filter_frame.deleteLater()
             except:
                 pass
             self.filter_frame = None
-        
+
         # Store pending transactions
         self.pending_transactions = result["transactions"]
         summary = result["summary"]
-        
+
         # Debug: Check if account field is present
         if self.pending_transactions:
-            print(f"DEBUG: First transaction account field: {self.pending_transactions[0].get('account', 'MISSING')}")
-        
+            print(
+                f"DEBUG: First transaction account field: {self.pending_transactions[0].get('account', 'MISSING')}"
+            )
+
         # Recalculate summary based on actual frontend logic
         total = len(self.pending_transactions)
         needs_review_count = 0
         auto_classified_count = 0
-        
+
         for tx in self.pending_transactions:
             # Get confidence from classification object or top level
-            confidence = tx.get("classification", {}).get("confidence", tx.get("confidence", 0.5))
+            confidence = tx.get("classification", {}).get(
+                "confidence", tx.get("confidence", 0.5)
+            )
             if confidence < 0.7 or tx.get("category") == "Uncategorized":
                 needs_review_count += 1
             else:
                 auto_classified_count += 1
-        
+
         # Create summary label
         self.summary_label = QLabel()
-        self.summary_label.setStyleSheet("""
+        self.summary_label.setStyleSheet(
+            """
             color: white;
             font-size: 14px;
             font-weight: bold;
@@ -318,32 +333,34 @@ class CSVImportModule:
             background-color: #2d3748;
             border-radius: 5px;
             margin: 10px 0px;
-        """)
-        
+        """
+        )
+
         summary_text = f"📊 Import Results: Total: {total} | ✅ Auto-classified: {auto_classified_count} | ⚠️ Needs Review: {needs_review_count}"
         self.summary_label.setText(summary_text)
-        
+
         # Insert summary after account selector
         layout = self.parent.layout()
         layout.insertWidget(3, self.summary_label)
-        
+
         # Load categories for dropdowns
         self.categories = self.load_categories()
         print(f"📋 Loaded {len(self.categories)} categories: {self.categories}")
-        
+
         # Create interactive table
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(6)
-        self.results_table.setHorizontalHeaderLabels([
-            "Status", "Date", "Description", "Amount", "Category", "Confidence"
-        ])
+        self.results_table.setHorizontalHeaderLabels(
+            ["Status", "Date", "Description", "Amount", "Category", "Confidence"]
+        )
         self.results_table.setRowCount(len(self.pending_transactions))
-        
+
         # Set row height to accommodate dropdown boxes
         self.results_table.verticalHeader().setDefaultSectionSize(45)
-        
+
         # Style the table
-        self.results_table.setStyleSheet("""
+        self.results_table.setStyleSheet(
+            """
             QTableWidget {
                 background-color: white;
                 border: 2px solid #4a5568;
@@ -361,23 +378,28 @@ class CSVImportModule:
                 font-weight: bold;
                 border: none;
             }
-        """)
-        
+        """
+        )
+
         # Set column widths with stretch for Category column
         header = self.results_table.horizontalHeader()
-        self.results_table.setColumnWidth(0, 60)   # Status
+        self.results_table.setColumnWidth(0, 60)  # Status
         self.results_table.setColumnWidth(1, 100)  # Date
         self.results_table.setColumnWidth(2, 250)  # Description
         self.results_table.setColumnWidth(3, 100)  # Amount
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)  # Category stretches
+        header.setSectionResizeMode(
+            4, QHeaderView.ResizeMode.Stretch
+        )  # Category stretches
         self.results_table.setColumnWidth(5, 100)  # Confidence
-        
+
         # Populate table
         print(f"📊 Processing {len(self.pending_transactions)} transactions...")
         for row_idx, tx in enumerate(self.pending_transactions):
             if row_idx < 3:  # Debug first 3 transactions
-                classification = tx.get('classification', {})
-                print(f"  Transaction {row_idx}: category='{tx.get('category')}', confidence={classification.get('confidence')}, reason='{classification.get('reason')}'")
+                classification = tx.get("classification", {})
+                print(
+                    f"  Transaction {row_idx}: category='{tx.get('category')}', confidence={classification.get('confidence')}, reason='{classification.get('reason')}'"
+                )
             # Format date
             date_str = tx.get("date", "")
             if date_str:
@@ -388,11 +410,15 @@ class CSVImportModule:
                     formatted_date = date_str[:10]
             else:
                 formatted_date = "No date"
-            
+
             # Get confidence from classification object or top level (default 0.5 if not provided)
-            confidence = tx.get("classification", {}).get("confidence", tx.get("confidence", 0.5))
-            needs_review_flag = confidence < 0.7 or tx.get("category") == "Uncategorized"
-            
+            confidence = tx.get("classification", {}).get(
+                "confidence", tx.get("confidence", 0.5)
+            )
+            needs_review_flag = (
+                confidence < 0.7 or tx.get("category") == "Uncategorized"
+            )
+
             # Status indicator
             status_item = QTableWidgetItem()
             if needs_review_flag:
@@ -403,56 +429,63 @@ class CSVImportModule:
                 status_item.setBackground(QColor(209, 250, 229))  # Light green
             status_item.setFlags(Qt.ItemFlag.ItemIsEnabled)  # Not editable
             self.results_table.setItem(row_idx, 0, status_item)
-            
+
             # Date
             date_item = QTableWidgetItem(formatted_date)
             date_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             if needs_review_flag:
                 date_item.setBackground(QColor(255, 243, 205))
             self.results_table.setItem(row_idx, 1, date_item)
-            
+
             # Description
             desc_item = QTableWidgetItem(tx["description"][:50])
             desc_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             if needs_review_flag:
                 desc_item.setBackground(QColor(255, 243, 205))
             self.results_table.setItem(row_idx, 2, desc_item)
-            
+
             # Amount
             amount_item = QTableWidgetItem(f"${tx['amount']}")
             amount_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             if needs_review_flag:
                 amount_item.setBackground(QColor(255, 243, 205))
             self.results_table.setItem(row_idx, 3, amount_item)
-            
+
             # Category dropdown
             category_combo = QComboBox()
             category_combo.addItems(self.categories)
             current_category = tx.get("category", "Uncategorized")
-            
+
             # Try to find matching category (case-insensitive)
             category_index = -1
             for i, cat in enumerate(self.categories):
                 if cat.lower() == current_category.lower():
                     category_index = i
                     break
-            
+
             if category_index >= 0:
                 category_combo.setCurrentIndex(category_index)
                 if row_idx < 3:  # Debug first 3
-                    print(f"  Row {row_idx}: Set dropdown to index {category_index} = '{self.categories[category_index]}'")
+                    print(
+                        f"  Row {row_idx}: Set dropdown to index {category_index} = '{self.categories[category_index]}'"
+                    )
             else:
                 # Category not found, try exact match as fallback
                 category_combo.setCurrentText(current_category)
-                print(f"Warning: Category '{current_category}' not found in dropdown list. Available: {self.categories}")
+                print(
+                    f"Warning: Category '{current_category}' not found in dropdown list. Available: {self.categories}"
+                )
             category_combo.setProperty("row", row_idx)  # Store row index
             # Use lambda to pass both the new category and row index
             category_combo.currentTextChanged.connect(
-                lambda new_cat, r=row_idx, combo=category_combo: self.on_category_changed(new_cat, r, combo)
+                lambda new_cat, r=row_idx, combo=category_combo: self.on_category_changed(
+                    new_cat, r, combo
+                )
             )
-            
+
             # Simple styling - just clear, readable text
-            category_combo.setStyleSheet("""
+            category_combo.setStyleSheet(
+                """
                 QComboBox {
                     padding: 5px;
                     color: #1a202c;
@@ -465,10 +498,11 @@ class CSVImportModule:
                     color: #1a202c;
                     selection-background-color: #4299e1;
                 }
-            """)
-            
+            """
+            )
+
             self.results_table.setCellWidget(row_idx, 4, category_combo)
-            
+
             # Confidence
             conf_text = f"{int(confidence * 100)}%"
             if needs_review_flag:
@@ -478,15 +512,16 @@ class CSVImportModule:
             if needs_review_flag:
                 conf_item.setBackground(QColor(255, 243, 205))
             self.results_table.setItem(row_idx, 5, conf_item)
-        
+
         # Add filter buttons
         self.filter_frame = QFrame()
         filter_layout = QHBoxLayout()
         self.filter_frame.setLayout(filter_layout)
-        
+
         show_all_btn = QPushButton("📋 Show All")
         show_all_btn.clicked.connect(lambda: self.filter_table("all"))
-        show_all_btn.setStyleSheet("""
+        show_all_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #6c757d;
                 color: white;
@@ -497,11 +532,13 @@ class CSVImportModule:
             QPushButton:hover {
                 background-color: #5a6268;
             }
-        """)
-        
+        """
+        )
+
         show_review_btn = QPushButton("⚠️ Needs Review Only")
         show_review_btn.clicked.connect(lambda: self.filter_table("review"))
-        show_review_btn.setStyleSheet("""
+        show_review_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #ffc107;
                 color: #1a202c;
@@ -512,19 +549,21 @@ class CSVImportModule:
             QPushButton:hover {
                 background-color: #e0a800;
             }
-        """)
-        
+        """
+        )
+
         filter_layout.addWidget(show_all_btn)
         filter_layout.addWidget(show_review_btn)
         filter_layout.addStretch()
-        
+
         layout.insertWidget(4, self.filter_frame)
         layout.insertWidget(5, self.results_table)
-        
+
         # Show/enable commit button
         if not hasattr(self, "commit_button"):
             self.commit_button = QPushButton("💾 Commit Transactions")
-            self.commit_button.setStyleSheet("""
+            self.commit_button.setStyleSheet(
+                """
                 QPushButton {
                     background-color: #dc3545;
                     color: white;
@@ -537,7 +576,8 @@ class CSVImportModule:
                 QPushButton:hover {
                     background-color: #c82333;
                 }
-            """)
+            """
+            )
             self.commit_button.clicked.connect(self.commit_transactions)
             layout.addWidget(self.commit_button)
         else:
@@ -550,19 +590,19 @@ class CSVImportModule:
         # Get the transaction data
         tx = self.pending_transactions[row]
         original_category = tx.get("category", "Uncategorized")
-        
+
         # Update the transaction data
         self.pending_transactions[row]["category"] = new_category
-        
+
         # Track correction for learning if category actually changed
         if original_category != new_category and self.api:
             self.track_correction_for_learning(tx, original_category, new_category)
-        
+
         # Update status column to show it's been reviewed
         status_item = self.results_table.item(row, 0)
         status_item.setText("✅")
         status_item.setBackground(QColor(209, 250, 229))
-        
+
         # Update other cells in the row to green to show it's been reviewed
         for col in [1, 2, 3, 5]:
             item = self.results_table.item(row, col)
@@ -622,25 +662,29 @@ class CSVImportModule:
 
             if response.status_code == 200:
                 result = response.json()
-                
+
                 # Send enhanced Telegram notification
-                if self.api and hasattr(self.api, 'telegram'):
+                if self.api and hasattr(self.api, "telegram"):
                     # Get account from first transaction (they should all be the same)
-                    account = transactions[0].get('account', 'main') if transactions else 'main'
-                    
+                    account = (
+                        transactions[0].get("account", "main")
+                        if transactions
+                        else "main"
+                    )
+
                     # Calculate categories summary
                     categories_summary = {}
                     for tx in transactions:
-                        category = tx.get('category', 'Uncategorized')
-                        categories_summary[category] = categories_summary.get(category, 0) + 1
-                    
+                        category = tx.get("category", "Uncategorized")
+                        categories_summary[category] = (
+                            categories_summary.get(category, 0) + 1
+                        )
+
                     # Send enhanced notification
                     self.api.telegram.notify_csv_commit(
-                        result['saved'], 
-                        account, 
-                        categories_summary
+                        result["saved"], account, categories_summary
                     )
-                
+
                 QMessageBox.information(
                     self.parent,
                     "Success",
@@ -649,26 +693,26 @@ class CSVImportModule:
                 )
                 # Clear the pending transactions and hide UI elements
                 self.pending_transactions = []
-                if hasattr(self, 'commit_button') and self.commit_button is not None:
+                if hasattr(self, "commit_button") and self.commit_button is not None:
                     try:
                         self.commit_button.hide()
                     except:
                         pass
-                if hasattr(self, 'results_table') and self.results_table is not None:
+                if hasattr(self, "results_table") and self.results_table is not None:
                     try:
                         self.results_table.setParent(None)
                         self.results_table.deleteLater()
                     except:
                         pass
                     self.results_table = None
-                if hasattr(self, 'filter_frame') and self.filter_frame is not None:
+                if hasattr(self, "filter_frame") and self.filter_frame is not None:
                     try:
                         self.filter_frame.setParent(None)
                         self.filter_frame.deleteLater()
                     except:
                         pass
                     self.filter_frame = None
-                if hasattr(self, 'summary_label') and self.summary_label is not None:
+                if hasattr(self, "summary_label") and self.summary_label is not None:
                     try:
                         self.summary_label.setParent(None)
                         self.summary_label.deleteLater()
@@ -690,11 +734,11 @@ class CSVImportModule:
         """Track user correction for learning system"""
         try:
             import requests
-            
+
             # Get original confidence from classification
             classification = tx.get("classification", {})
             confidence = classification.get("confidence", 0.5)
-            
+
             # Send correction to learning API
             correction_data = {
                 "user_id": "user1",  # Default user ID
@@ -702,20 +746,22 @@ class CSVImportModule:
                 "original_category": original_category,
                 "corrected_category": corrected_category,
                 "amount": tx.get("amount", 0),
-                "confidence": confidence
+                "confidence": confidence,
             }
-            
+
             response = requests.post(
                 f"{self.api.aws_api_url}/learning/correction",
                 json=correction_data,
-                timeout=5
+                timeout=5,
             )
-            
+
             if response.status_code == 200:
-                print(f"🧠 Learning: '{tx.get('description', '')[:30]}...' {original_category} → {corrected_category}")
+                print(
+                    f"🧠 Learning: '{tx.get('description', '')[:30]}...' {original_category} → {corrected_category}"
+                )
             else:
                 print(f"Learning API error: {response.status_code}")
-                
+
         except Exception as e:
             print(f"Learning tracking error: {e}")
             # Don't show error to user, learning is optional

@@ -8,6 +8,7 @@ from typing import Optional
 
 try:
     import google.generativeai as genai
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -27,71 +28,68 @@ VALID_CATEGORIES = [
     "Education",
     "Credit Card Payments",
     "Transfers",
-    "Other"
+    "Other",
 ]
 
 
 class GeminiClassifier:
     """Google Gemini AI transaction classifier"""
-    
+
     def __init__(self):
         self.enabled = False
         self.model = None
-        
+
         # Try to initialize Gemini
-        api_key = os.getenv('GEMINI_API_KEY')
-        
+        api_key = os.getenv("GEMINI_API_KEY")
+
         if not GEMINI_AVAILABLE:
             print("❌ Gemini AI: Library not installed")
             return
-        
+
         if not api_key:
             print("⚠️ Gemini AI: No API key found (GEMINI_API_KEY)")
             return
-        
+
         try:
             genai.configure(api_key=api_key)
             # Use gemini-2.0-flash-exp (latest free model)
-            self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            self.model = genai.GenerativeModel("gemini-2.0-flash-exp")
             self.enabled = True
             print("✅ Gemini AI: Initialized successfully")
         except Exception as e:
             print(f"❌ Gemini AI: Initialization failed - {e}")
-    
-    
+
     def is_enabled(self) -> bool:
         """Check if AI classification is available"""
         return self.enabled and self.model is not None
-    
-    
+
     def classify(self, description: str, amount: float) -> Optional[str]:
         """
         Classify a transaction using Gemini AI.
-        
+
         Args:
             description: Transaction description
             amount: Transaction amount (negative for expenses, positive for income)
-        
+
         Returns:
             Category name or None if classification fails
         """
         if not self.is_enabled():
             return None
-        
+
         prompt = self._build_prompt(description, amount)
-        
+
         try:
             response = self.model.generate_content(prompt)
             category = response.text.strip()
-            
+
             # Validate and return
             return self._validate_category(category)
-        
+
         except Exception as e:
             print(f"⚠️ Gemini AI classification error: {e}")
             return None
-    
-    
+
     def _build_prompt(self, description: str, amount: float) -> str:
         """Build the prompt for Gemini"""
         return f"""You are a financial transaction classifier for a New Zealand user.
@@ -114,25 +112,26 @@ Classification Rules:
 8. Be specific - choose the most accurate category
 
 Respond with ONLY the category name from the list above. No explanation, no punctuation, just the category name."""
-    
-    
+
     def _validate_category(self, category: str) -> Optional[str]:
         """Validate AI response matches our categories"""
         # Exact match
         if category in VALID_CATEGORIES:
             return category
-        
+
         # Fuzzy match (case-insensitive, partial)
         category_lower = category.lower()
         for valid_cat in VALID_CATEGORIES:
-            if valid_cat.lower() in category_lower or category_lower in valid_cat.lower():
+            if (
+                valid_cat.lower() in category_lower
+                or category_lower in valid_cat.lower()
+            ):
                 return valid_cat
-        
+
         # No match found
         print(f"⚠️ AI returned invalid category: '{category}'")
         return None
-    
-    
+
     def get_status(self) -> dict:
         """Get AI classifier status"""
         return {
@@ -140,12 +139,13 @@ Respond with ONLY the category name from the list above. No explanation, no punc
             "provider": "Google Gemini" if self.enabled else None,
             "model": "gemini-pro" if self.enabled else None,
             "library_available": GEMINI_AVAILABLE,
-            "api_key_configured": bool(os.getenv('GEMINI_API_KEY'))
+            "api_key_configured": bool(os.getenv("GEMINI_API_KEY")),
         }
 
 
 # Global instance (singleton pattern)
 _gemini_classifier = None
+
 
 def get_ai_classifier() -> GeminiClassifier:
     """Get or create the global AI classifier instance"""
@@ -168,4 +168,3 @@ def is_ai_enabled() -> bool:
     """Check if AI classification is available"""
     classifier = get_ai_classifier()
     return classifier.is_enabled()
-

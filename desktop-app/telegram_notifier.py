@@ -63,18 +63,20 @@ class TelegramNotifier:
         # Create account emoji
         account_emoji = {
             "main": "🏦",
-            "savings": "💰", 
+            "savings": "💰",
             "bills": "💳",
-            "credit": "💳"
+            "credit": "💳",
         }.get(account.lower(), "📊")
-        
+
         # Format categories summary
         top_categories = []
         for category, count in list(categories_summary.items())[:3]:
             top_categories.append(f"• {category}: {count}")
-        
-        categories_text = "\n".join(top_categories) if top_categories else "• No categories"
-        
+
+        categories_text = (
+            "\n".join(top_categories) if top_categories else "• No categories"
+        )
+
         message = f"""
 {account_emoji} *CSV Transactions Added*
 
@@ -86,5 +88,5 @@ class TelegramNotifier:
 
 ✅ All transactions successfully saved!
         """.strip()
-        
+
         self.send_message(message)

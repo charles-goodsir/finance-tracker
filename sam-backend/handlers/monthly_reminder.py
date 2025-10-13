@@ -9,13 +9,13 @@ def lambda_handler(event, context):
     Triggered by EventBridge schedule.
     """
 
-    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     if not bot_token or not chat_id:
         print("Telegram credentials not configured")
         return {"statusCode": 200, "body": "No Telegram configred"}
-    
+
     current_month = datetime.now().strftime("%B %Y")
     day = datetime.now().day
 
@@ -44,26 +44,16 @@ Open your Finance Tracker app to get started 🚀
     try:
         response = requests.post(
             url,
-            data={
-                "chat_id": chat_id,
-                "text": message,
-                "parse_mode": "Markdown"
-            },
-            timeout=10
+            data={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
+            timeout=10,
         )
 
         if response.status_code == 200:
             print("✅ Sent monthly reminder for {current_month}")
-            return {
-                "status_Code": 200,
-                "body": f"Reminder sent for {current_month}"
-            }
+            return {"status_Code": 200, "body": f"Reminder sent for {current_month}"}
         else:
             print(f"❌ Failed to send: {response.text}")
-            return {
-                "status_Code": 500,
-                "body": f"Failed: {response.text}"
-            }
+            return {"status_Code": 500, "body": f"Failed: {response.text}"}
     except Exception as e:
         print(f"Error: {e}")
         return {"statusCode": 500, "body": str(e)}

@@ -49,7 +49,7 @@ class InsightsModule:
             else:
                 description = "There's room for improvement. Review your spending."
             self.health_description.setText(description)
-        
+
         # Color based on score
         if score >= 80:
             color = "#4CAF50"
@@ -63,22 +63,24 @@ class InsightsModule:
         self.alerts_list.clear()
         for alert in data.get("alerts", []):
             self.alerts_list.addItem(alert.get("message", ""))
-        
+
         # If no alerts, show a friendly message
         if not data.get("alerts"):
             self.alerts_list.addItem("✅ Everything looks good!")
 
         # Update suggestions with actionable recommendations
         self.suggestions_list.clear()
-        
+
         # Add suggestions from backend (with $ amounts and priorities)
         suggestions = data.get("suggestions", [])
         if suggestions:
             for suggestion in suggestions:
                 priority = suggestion.get("priority", "medium")
                 emoji = "🔴" if priority == "high" else "🟡"
-                self.suggestions_list.addItem(f"{emoji} {suggestion.get('message', '')}")
-        
+                self.suggestions_list.addItem(
+                    f"{emoji} {suggestion.get('message', '')}"
+                )
+
         # Add trends information
         trends = data.get("trends", {})
         if trends:
@@ -89,7 +91,7 @@ class InsightsModule:
                 self.suggestions_list.addItem(
                     f"{emoji} Spending {direction} {abs(spending_change):.0f}% vs last month"
                 )
-        
+
         # Add forecast information
         forecast = data.get("forecast", {})
         if forecast:
@@ -99,11 +101,15 @@ class InsightsModule:
                 self.suggestions_list.addItem(
                     f"📊 Projected monthly spending: ${projected:.0f} ({days_remaining} days left)"
                 )
-        
+
         # If no suggestions, show encouragement
         if not suggestions and not trends and not forecast:
-            self.suggestions_list.addItem("💡 Keep tracking your expenses for personalized insights!")
-            self.suggestions_list.addItem("📈 Add more transactions to see trends and forecasts")
+            self.suggestions_list.addItem(
+                "💡 Keep tracking your expenses for personalized insights!"
+            )
+            self.suggestions_list.addItem(
+                "📈 Add more transactions to see trends and forecasts"
+            )
 
     def setup_ui(self):
         layout = QVBoxLayout()

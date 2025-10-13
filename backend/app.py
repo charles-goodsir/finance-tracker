@@ -520,21 +520,28 @@ def import_bank_csv(
                         continue
                 else:
                     date_iso = datetime.utcnow().isoformat()
-            
+
             # Use description for classification (more detailed than other_party)
             classify_text = description if description else other_party
-            
+
             # ✅ CHECK FOR TRANSFERS FIRST (before classification)
             # Detects transfers between accounts (masked account numbers)
             is_transfer = (
-                "payment received" in classify_text.lower() or
-                "to ****" in other_party.lower() or
-                "from ****" in other_party.lower() or
-                "frm " in other_party.lower() and len(other_party) > 10 or  # "FRM" followed by account number
-                ("online banking" in description.lower() and ("to " in other_party.lower() or "from " in other_party.lower())) or
-                ("direct credit" in description.lower() and any(char.isdigit() for char in other_party))  # Direct credit with numbers
+                "payment received" in classify_text.lower()
+                or "to ****" in other_party.lower()
+                or "from ****" in other_party.lower()
+                or "frm " in other_party.lower()
+                and len(other_party) > 10  # "FRM" followed by account number
+                or (
+                    "online banking" in description.lower()
+                    and ("to " in other_party.lower() or "from " in other_party.lower())
+                )
+                or (
+                    "direct credit" in description.lower()
+                    and any(char.isdigit() for char in other_party)
+                )  # Direct credit with numbers
             )
-            
+
             if is_transfer:
                 # This is a transfer - don't classify, mark as transfer
                 cat = "Transfers"
@@ -543,8 +550,10 @@ def import_bank_csv(
                 tx_type = "transfer"
             else:
                 # Not a transfer - classify normally
-                cat, conf, reason = classify(classify_text, amount, use_ai=True, user_id=user_id)
-                
+                cat, conf, reason = classify(
+                    classify_text, amount, use_ai=True, user_id=user_id
+                )
+
                 # Determine transaction type
                 if amount > 0:
                     tx_type = "income"
@@ -555,7 +564,11 @@ def import_bank_csv(
                 "user_id": user_id,
                 "date": date_iso,
                 "amount": amount,
-                "description": f"{other_party} - {description}" if description and description != other_party else other_party,
+                "description": (
+                    f"{other_party} - {description}"
+                    if description and description != other_party
+                    else other_party
+                ),
                 "category": cat,
                 "type": tx_type,
                 "frequency": "One-Off",
@@ -718,6 +731,7 @@ def get_insights_endpoint(user_id: str = "user1"):
 
 # ===== ACCOUNT BALANCE ENDPOINTS =====
 
+
 class AccountBalanceIn(BaseModel):
     user_id: str = "user1"
     account: str  # "savings", "bills", "main", "credit"
@@ -729,15 +743,19 @@ def set_balance_endpoint(data: AccountBalanceIn):
     """Set account balance"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import set_account_balance
-        
+
         success = set_account_balance(data.user_id, data.account, data.balance)
         if success:
-            send_telegram(f"💰 Account balance updated: {data.account} = ${data.balance:.2f}")
+            send_telegram(
+                f"💰 Account balance updated: {data.account} = ${data.balance:.2f}"
+            )
             return {"status": "ok", "message": f"Balance set for {data.account}"}
         else:
             raise HTTPException(status_code=500, detail="Failed to set balance")
     else:
-        raise HTTPException(status_code=501, detail="Account balances only supported on AWS")
+        raise HTTPException(
+            status_code=501, detail="Account balances only supported on AWS"
+        )
 
 
 @app.get("/accounts/balances")
@@ -745,11 +763,13 @@ def get_balances_endpoint(user_id: str = "user1"):
     """Get all account balances"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import get_account_balances
-        
+
         balances = get_account_balances(user_id)
         return {"balances": balances}
     else:
-        raise HTTPException(status_code=501, detail="Account balances only supported on AWS")
+        raise HTTPException(
+            status_code=501, detail="Account balances only supported on AWS"
+        )
 
 
 @app.get("/accounts/networth")
@@ -757,7 +777,7 @@ def get_networth_endpoint(user_id: str = "user1"):
     """Calculate net worth"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import calculate_net_worth
-        
+
         networth_data = calculate_net_worth(user_id)
         return networth_data
     else:
@@ -766,11 +786,13 @@ def get_networth_endpoint(user_id: str = "user1"):
 
 # ===== AI CLASSIFICATION ENDPOINTS =====
 
+
 @app.get("/ai/status")
 def ai_status_endpoint():
     """Get AI classification status and availability"""
     try:
         from ai_classifier import get_ai_classifier
+
         classifier = get_ai_classifier()
         return classifier.get_status()
     except ImportError:
@@ -780,7 +802,7 @@ def ai_status_endpoint():
             "model": None,
             "library_available": False,
             "api_key_configured": False,
-            "error": "ai_classifier module not available"
+            "error": "ai_classifier module not available",
         }
 
 
@@ -789,15 +811,15 @@ def ai_classify_endpoint(description: str, amount: float):
     """Manually classify a transaction using AI (for testing)"""
     try:
         from ai_classifier import classify_with_ai
-        
+
         category = classify_with_ai(description, amount)
-        
+
         if category:
             return {
                 "description": description,
                 "amount": amount,
                 "category": category,
-                "method": "ai"
+                "method": "ai",
             }
         else:
             return {
@@ -805,13 +827,14 @@ def ai_classify_endpoint(description: str, amount: float):
                 "amount": amount,
                 "category": "Other",
                 "method": "fallback",
-                "error": "AI classification failed"
+                "error": "AI classification failed",
             }
     except ImportError:
         raise HTTPException(status_code=501, detail="AI classifier not available")
 
 
 # ===== BALANCE SNAPSHOT ENDPOINTS =====
+
 
 class BalanceSnapshotIn(BaseModel):
     user_id: str = "user1"
@@ -827,23 +850,25 @@ def save_snapshot_endpoint(data: BalanceSnapshotIn):
     """Save balance snapshot for a specific date"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import save_balance_snapshot
-        
+
         balances = {
-            'savings': data.savings,
-            'bills': data.bills,
-            'main': data.main,
-            'credit': data.credit
+            "savings": data.savings,
+            "bills": data.bills,
+            "main": data.main,
+            "credit": data.credit,
         }
-        
+
         success = save_balance_snapshot(data.user_id, data.snapshot_date, balances)
-        
+
         if success:
             total_assets = data.savings + data.bills + data.main
-            send_telegram(f"📸 Balance snapshot saved for {data.snapshot_date}\n💰 Total Assets: ${total_assets:.2f}")
+            send_telegram(
+                f"📸 Balance snapshot saved for {data.snapshot_date}\n💰 Total Assets: ${total_assets:.2f}"
+            )
             return {
                 "status": "success",
                 "message": f"Snapshot saved for {data.snapshot_date}",
-                "total_assets": total_assets
+                "total_assets": total_assets,
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to save snapshot")
@@ -856,13 +881,15 @@ def get_snapshot_endpoint(snapshot_date: str, user_id: str = "user1"):
     """Get balance snapshot for a specific date"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import get_balance_snapshot
-        
+
         snapshot = get_balance_snapshot(user_id, snapshot_date)
-        
+
         if snapshot:
             return snapshot
         else:
-            raise HTTPException(status_code=404, detail=f"No snapshot found for {snapshot_date}")
+            raise HTTPException(
+                status_code=404, detail=f"No snapshot found for {snapshot_date}"
+            )
     else:
         raise HTTPException(status_code=501, detail="Snapshots only supported on AWS")
 
@@ -872,7 +899,7 @@ def list_snapshots_endpoint(user_id: str = "user1", limit: int = 12):
     """Get recent balance snapshots"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import get_balance_snapshots
-        
+
         snapshots = get_balance_snapshots(user_id, limit)
         return {"snapshots": snapshots, "count": len(snapshots)}
     else:
@@ -881,9 +908,7 @@ def list_snapshots_endpoint(user_id: str = "user1", limit: int = 12):
 
 @app.get("/summary/period")
 def period_summary_endpoint(
-    user_id: str = "user1",
-    start_date: str = None,
-    end_date: str = None
+    user_id: str = "user1", start_date: str = None, end_date: str = None
 ):
     """
     Get comprehensive period summary with both balance-based and transaction-based calculations.
@@ -891,20 +916,23 @@ def period_summary_endpoint(
     """
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         from aws_db import calculate_period_summary
-        
+
         if not start_date or not end_date:
             raise HTTPException(
                 status_code=400,
-                detail="Both start_date and end_date required (format: YYYY-MM-DD)"
+                detail="Both start_date and end_date required (format: YYYY-MM-DD)",
             )
-        
+
         summary = calculate_period_summary(user_id, start_date, end_date)
         return summary
     else:
-        raise HTTPException(status_code=501, detail="Period summary only supported on AWS")
+        raise HTTPException(
+            status_code=501, detail="Period summary only supported on AWS"
+        )
 
 
 # ===== LEARNING SYSTEM ENDPOINTS =====
+
 
 class LearningCorrectionIn(BaseModel):
     user_id: str = "user1"
@@ -913,6 +941,7 @@ class LearningCorrectionIn(BaseModel):
     corrected_category: str
     amount: float
     confidence: float
+
 
 @app.post("/learning/correction")
 def save_learning_correction_endpoint(data: LearningCorrectionIn):
@@ -924,28 +953,26 @@ def save_learning_correction_endpoint(data: LearningCorrectionIn):
             data.original_category,
             data.corrected_category,
             data.amount,
-            data.confidence
+            data.confidence,
         )
         return {
             "status": "success",
             "learning_id": learning_id,
-            "message": "Correction saved for future learning"
+            "message": "Correction saved for future learning",
         }
     else:
         raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
 
 @app.get("/learning/patterns")
 def get_learning_patterns_endpoint(user_id: str = "user1", limit: int = 50):
     """Get learning patterns for a user"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         patterns = get_learning_patterns(user_id, limit)
-        return {
-            "user_id": user_id,
-            "patterns": patterns,
-            "count": len(patterns)
-        }
+        return {"user_id": user_id, "patterns": patterns, "count": len(patterns)}
     else:
         raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
 
 @app.get("/learning/stats")
 def get_learning_stats_endpoint(user_id: str = "user1"):
@@ -956,19 +983,23 @@ def get_learning_stats_endpoint(user_id: str = "user1"):
     else:
         raise HTTPException(status_code=501, detail="Learning only supported on AWS")
 
+
 @app.get("/learning/apply")
 def apply_learning_endpoint(description: str, amount: float, user_id: str = "user1"):
     """Apply learning to classify a transaction"""
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
-        learned_category = apply_learning_to_classification(user_id, description, amount)
+        learned_category = apply_learning_to_classification(
+            user_id, description, amount
+        )
         return {
             "description": description,
             "amount": amount,
             "learned_category": learned_category,
-            "has_learning": learned_category is not None
+            "has_learning": learned_category is not None,
         }
     else:
         raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
 
 @app.post("/learning/scan")
 def scan_transactions_for_learning_endpoint(user_id: str = "user1", limit: int = 1000):
@@ -978,6 +1009,7 @@ def scan_transactions_for_learning_endpoint(user_id: str = "user1", limit: int =
         return result
     else:
         raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
 
 @app.get("/learning/scan-stats")
 def get_learning_scan_stats_endpoint(user_id: str = "user1"):

@@ -73,7 +73,9 @@ class AccountsModule:
             balance_input = QLineEdit()
             balance_input.setPlaceholderText("$0.00")
             balance_input.setFixedWidth(200)  # Fixed width so it doesn't shrink
-            balance_input.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            balance_input.setSizePolicy(
+                QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+            )
             balance_input.setStyleSheet(
                 """
                 QLineEdit {
@@ -116,14 +118,18 @@ class AccountsModule:
 
         # ===== Credit Card Management Section =====
         layout.addSpacing(20)
-        
+
         # Create credit card widget
         self.credit_card_widget = CreditCardWidget(self.api)
         layout.addWidget(self.credit_card_widget)
-        
+
         # Connect button actions
-        self.credit_card_widget.view_transactions_btn.clicked.connect(self.view_credit_transactions)
-        self.credit_card_widget.payment_history_btn.clicked.connect(self.show_payment_history)
+        self.credit_card_widget.view_transactions_btn.clicked.connect(
+            self.view_credit_transactions
+        )
+        self.credit_card_widget.payment_history_btn.clicked.connect(
+            self.show_payment_history
+        )
 
         # ===== NEW: Monthly Snapshot Section =====
         layout.addSpacing(20)
@@ -136,7 +142,9 @@ class AccountsModule:
         snapshot_instructions = QLabel(
             "Save snapshots at month-end to enable accurate savings tracking"
         )
-        snapshot_instructions.setStyleSheet("color: #a0aec0; padding: 5px; font-size: 13px;")
+        snapshot_instructions.setStyleSheet(
+            "color: #a0aec0; padding: 5px; font-size: 13px;"
+        )
         snapshot_instructions.setWordWrap(True)
         layout.addWidget(snapshot_instructions)
 
@@ -363,9 +371,9 @@ class AccountsModule:
                 snapshots = data.get("snapshots", [])
                 self.display_snapshots(snapshots)
                 self.show_status(f"✅ Loaded {len(snapshots)} snapshots", "#4CAF50")
-                
+
                 # Also load credit card data
-                if hasattr(self, 'credit_card_widget'):
+                if hasattr(self, "credit_card_widget"):
                     self.credit_card_widget.load_from_aws()
             else:
                 self.show_status("⚠️ No snapshots found", "orange")
@@ -403,84 +411,92 @@ class AccountsModule:
         self.status_label.setStyleSheet(
             f"color: {color}; font-weight: bold; padding: 10px;"
         )
-    
+
     def view_credit_transactions(self):
         """Open Transactions tab filtered to credit card"""
         # This will be connected to switch to Transactions tab with credit filter
-        self.credit_card_widget.show_status("💳 Opening credit card transactions...", "#3b82f6")
+        self.credit_card_widget.show_status(
+            "💳 Opening credit card transactions...", "#3b82f6"
+        )
         # In a full implementation, this would emit a signal or call parent to switch tabs
         # For now, show a helpful message
-        QTimer.singleShot(1500, lambda: self.credit_card_widget.show_status("", "white"))
-    
+        QTimer.singleShot(
+            1500, lambda: self.credit_card_widget.show_status("", "white")
+        )
+
     def show_payment_history(self):
         """Show credit card payment history"""
         if not self.api:
             self.credit_card_widget.show_status("⚠️ API not configured", "#f59e0b")
             return
-        
+
         try:
             # Get transactions with "Credit Card Payments" category
             response = requests.get(
                 f"{self.api.aws_api_url}/transactions?user_id=user1&limit=200",
-                timeout=10
+                timeout=10,
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 transactions = data.get("items", [])
-                
+
                 # Filter for credit card payments
                 payments = [
-                    t for t in transactions 
+                    t
+                    for t in transactions
                     if t.get("category") == "Credit Card Payments"
                 ]
-                
+
                 # Sort by date descending
                 payments.sort(key=lambda x: x.get("date", ""), reverse=True)
-                
+
                 # Show in a dialog
                 self.display_payment_history_dialog(payments[:10])  # Last 10 payments
             else:
-                self.credit_card_widget.show_status(f"❌ Error: {response.status_code}", "#ef4444")
-        
+                self.credit_card_widget.show_status(
+                    f"❌ Error: {response.status_code}", "#ef4444"
+                )
+
         except Exception as e:
             self.credit_card_widget.show_status(f"❌ Error: {str(e)}", "#ef4444")
             print(f"Error loading payment history: {e}")
-    
+
     def display_payment_history_dialog(self, payments):
         """Display payment history in a dialog"""
         dialog = QDialog(self.parent)
         dialog.setWindowTitle("💰 Credit Card Payment History")
         dialog.setMinimumWidth(600)
         dialog.setMinimumHeight(400)
-        
+
         layout = QVBoxLayout()
         dialog.setLayout(layout)
-        
+
         # Title
         title = QLabel("Recent Credit Card Payments")
         title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         title.setStyleSheet("padding: 10px;")
         layout.addWidget(title)
-        
+
         # Table
         table = QTableWidget()
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(["Date", "Amount", "Description"])
         table.horizontalHeader().setStretchLastSection(True)
         table.setRowCount(len(payments))
-        
+
         for row, payment in enumerate(payments):
             table.setItem(row, 0, QTableWidgetItem(payment.get("date", "")[:10]))
             table.setItem(row, 1, QTableWidgetItem(f"${payment.get('amount', 0):.2f}"))
             table.setItem(row, 2, QTableWidgetItem(payment.get("description", "")))
-        
+
         layout.addWidget(table)
-        
+
         # Close button
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dialog.close)
-        close_btn.setStyleSheet("""
+        close_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #3b82f6;
                 color: white;
@@ -491,7 +507,8 @@ class AccountsModule:
             QPushButton:hover {
                 background-color: #2563eb;
             }
-        """)
+        """
+        )
         layout.addWidget(close_btn)
-        
+
         dialog.exec()

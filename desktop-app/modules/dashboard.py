@@ -44,7 +44,9 @@ class DashboardModule:
         self.subtitle = QLabel("Track your financial health")
         self.subtitle.setFont(QFont("Arial", 12))
         self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.subtitle.setStyleSheet("color: rgba(255,255,255,0.8); padding-bottom: 10px;")
+        self.subtitle.setStyleSheet(
+            "color: rgba(255,255,255,0.8); padding-bottom: 10px;"
+        )
         header_layout.addWidget(self.subtitle)
 
         main_layout.addWidget(header_frame)
@@ -148,11 +150,18 @@ class DashboardModule:
     def update_stats(self, transactions):
         """Update the stat cards with transaction data"""
         # Exclude these categories from income/expense calculations
-        excluded_categories = ['Transfers', 'Payment', 'Cash Withdrawal', 'Credit Card Payments']
-        
+        excluded_categories = [
+            "Transfers",
+            "Payment",
+            "Cash Withdrawal",
+            "Credit Card Payments",
+        ]
+
         # Filter transactions
-        filtered_txs = [tx for tx in transactions if tx.get("category") not in excluded_categories]
-        
+        filtered_txs = [
+            tx for tx in transactions if tx.get("category") not in excluded_categories
+        ]
+
         income = sum(tx["amount"] for tx in filtered_txs if tx["amount"] > 0)
         expenses = abs(sum(tx["amount"] for tx in filtered_txs if tx["amount"] < 0))
         net = income - expenses
@@ -200,17 +209,17 @@ class DashboardModule:
             # First, get the most recent snapshot to determine the period
             response = requests.get(
                 f"{self.api.aws_api_url}/snapshots/list?user_id=user1&limit=1",
-                timeout=10
+                timeout=10,
             )
 
-            if response.status_code != 200 or not response.json().get('snapshots'):
+            if response.status_code != 200 or not response.json().get("snapshots"):
                 # No snapshots, show all-time stats
                 self.update_stats(self.db.get_local_transactions())
                 return
 
-            latest_snapshot = response.json()['snapshots'][0]
-            end_date = latest_snapshot['snapshot_date']  # e.g., "2025-10-10"
-            
+            latest_snapshot = response.json()["snapshots"][0]
+            end_date = latest_snapshot["snapshot_date"]  # e.g., "2025-10-10"
+
             # Calculate start date (1 month before)
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
             start_dt = end_dt - timedelta(days=30)
@@ -224,18 +233,18 @@ class DashboardModule:
                     "start_date": start_date,
                     "end_date": end_date,
                 },
-                timeout=10
+                timeout=10,
             )
 
             if summary_response.status_code == 200:
                 data = summary_response.json()
-                summary = data.get('transaction_based', {})
-                
+                summary = data.get("transaction_based", {})
+
                 # Update cards with current period data
                 self.income_card.update_value(f"${summary.get('income', 0):.2f}")
                 self.expense_card.update_value(f"${summary.get('spending', 0):.2f}")
                 self.net_card.update_value(f"${summary.get('net_savings', 0):.2f}")
-                
+
                 # Update subtitle to show period
                 self.subtitle.setText(f"Current Period: {start_date} to {end_date}")
             else:
@@ -253,13 +262,12 @@ class DashboardModule:
 
         try:
             response = requests.get(
-                f"{self.api.aws_api_url}/transactions?user_id=user1&limit=5",
-                timeout=10
+                f"{self.api.aws_api_url}/transactions?user_id=user1&limit=5", timeout=10
             )
 
             if response.status_code == 200:
                 data = response.json()
-                transactions = data.get('items', [])
+                transactions = data.get("items", [])
                 self.display_recent_transactions_aws(transactions)
 
         except Exception as e:
@@ -270,10 +278,14 @@ class DashboardModule:
         self.recent_table.setRowCount(len(transactions))
 
         for row, tx in enumerate(transactions):
-            self.recent_table.setItem(row, 0, QTableWidgetItem(tx.get('date', '')))
-            self.recent_table.setItem(row, 1, QTableWidgetItem(tx.get('description', '')))
-            self.recent_table.setItem(row, 2, QTableWidgetItem(f"${tx.get('amount', 0):.2f}"))
-            self.recent_table.setItem(row, 3, QTableWidgetItem(tx.get('category', '')))
+            self.recent_table.setItem(row, 0, QTableWidgetItem(tx.get("date", "")))
+            self.recent_table.setItem(
+                row, 1, QTableWidgetItem(tx.get("description", ""))
+            )
+            self.recent_table.setItem(
+                row, 2, QTableWidgetItem(f"${tx.get('amount', 0):.2f}")
+            )
+            self.recent_table.setItem(row, 3, QTableWidgetItem(tx.get("category", "")))
 
     def load_net_worth(self):
         """Load and display net worth from AWS"""
