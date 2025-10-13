@@ -432,7 +432,7 @@ def import_csv_smart(file: UploadFile = File(...), user_id: str = "default"):
                 or datetime.utcnow().isoformat()
             )
 
-            cat, conf, reason = classify(desc, amt)
+            cat, conf, reason = classify(desc, amt, use_ai=True, user_id=user_id)
             tx = {
                 "user_id": user_id,
                 "date": date,
@@ -543,7 +543,7 @@ def import_bank_csv(
                 tx_type = "transfer"
             else:
                 # Not a transfer - classify normally
-                cat, conf, reason = classify(classify_text, amount, use_ai=True)
+                cat, conf, reason = classify(classify_text, amount, use_ai=True, user_id=user_id)
                 
                 # Determine transaction type
                 if amount > 0:
@@ -902,3 +902,88 @@ def period_summary_endpoint(
         return summary
     else:
         raise HTTPException(status_code=501, detail="Period summary only supported on AWS")
+
+
+# ===== LEARNING SYSTEM ENDPOINTS =====
+
+class LearningCorrectionIn(BaseModel):
+    user_id: str = "user1"
+    description: str
+    original_category: str
+    corrected_category: str
+    amount: float
+    confidence: float
+
+@app.post("/learning/correction")
+def save_learning_correction_endpoint(data: LearningCorrectionIn):
+    """Save a user correction to improve future classifications"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        learning_id = save_learning_correction(
+            data.user_id,
+            data.description,
+            data.original_category,
+            data.corrected_category,
+            data.amount,
+            data.confidence
+        )
+        return {
+            "status": "success",
+            "learning_id": learning_id,
+            "message": "Correction saved for future learning"
+        }
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
+@app.get("/learning/patterns")
+def get_learning_patterns_endpoint(user_id: str = "user1", limit: int = 50):
+    """Get learning patterns for a user"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        patterns = get_learning_patterns(user_id, limit)
+        return {
+            "user_id": user_id,
+            "patterns": patterns,
+            "count": len(patterns)
+        }
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
+@app.get("/learning/stats")
+def get_learning_stats_endpoint(user_id: str = "user1"):
+    """Get learning statistics for a user"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        stats = get_learning_stats(user_id)
+        return stats
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
+@app.get("/learning/apply")
+def apply_learning_endpoint(description: str, amount: float, user_id: str = "user1"):
+    """Apply learning to classify a transaction"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        learned_category = apply_learning_to_classification(user_id, description, amount)
+        return {
+            "description": description,
+            "amount": amount,
+            "learned_category": learned_category,
+            "has_learning": learned_category is not None
+        }
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
+@app.post("/learning/scan")
+def scan_transactions_for_learning_endpoint(user_id: str = "user1", limit: int = 1000):
+    """Scan existing transactions to learn patterns"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        result = scan_existing_transactions_for_learning(user_id, limit)
+        return result
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")
+
+@app.get("/learning/scan-stats")
+def get_learning_scan_stats_endpoint(user_id: str = "user1"):
+    """Get statistics about learning scan results"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        stats = get_learning_scan_stats(user_id)
+        return stats
+    else:
+        raise HTTPException(status_code=501, detail="Learning only supported on AWS")

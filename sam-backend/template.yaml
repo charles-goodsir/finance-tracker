@@ -156,6 +156,25 @@ Resources:
         - Key: Application
           Value: FinanceTracker
 
+  LearningDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-LearningData"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: learning_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: learning_id
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FinanceTracker
+
   # Main FastAPI Lambda Function
   FinanceTrackerFunction:
     Type: AWS::Serverless::Function
@@ -172,6 +191,7 @@ Resources:
           INSIGHTS_TABLE: !Ref InsightsTable
           ACCOUNT_BALANCES_TABLE: !Ref AccountBalancesTable
           BALANCE_SNAPSHOTS_TABLE: !Ref BalanceSnapshotsTable
+          LEARNING_DATA_TABLE: !Ref LearningDataTable
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           TELEGRAM_CHAT_ID: !Ref TelegramChatId
           GEMINI_API_KEY: !Ref GeminiApiKey
@@ -190,6 +210,8 @@ Resources:
             TableName: !Ref AccountBalancesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref BalanceSnapshotsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LearningDataTable
       Events:
         Api:
           Type: Api

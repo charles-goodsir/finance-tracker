@@ -46,14 +46,45 @@ class TelegramNotifier:
         )
         self.send_message(message)
 
-    def notify_bulk_commit(self, saved_count):
-        """Notify when transactions are committed in bulk"""
-        message = f"💰 Bulk commit: {saved_count} transactions saved successfully!"
-        self.send_message(message)
+    # def notify_bulk_commit(self, saved_count):
+    #     """Notify when transactions are committed in bulk"""
+    #     message = f"💰 Bulk commit: {saved_count} transactions saved successfully!"
+    #     self.send_message(message)
 
-    def notify_csv_import(self, total, auto_classified):
+    def notify_csv_import(self, total, auto_classified, account="main"):
         """Notify when CSV is imported"""
         message = (
             f"📊 CSV Import: {total} transactions, {auto_classified} auto-classified"
         )
+        self.send_message(message)
+
+    def notify_csv_commit(self, saved_count, account, categories_summary):
+        """Notify when CSV transactions are committed with account and category details"""
+        # Create account emoji
+        account_emoji = {
+            "main": "🏦",
+            "savings": "💰", 
+            "bills": "💳",
+            "credit": "💳"
+        }.get(account.lower(), "📊")
+        
+        # Format categories summary
+        top_categories = []
+        for category, count in list(categories_summary.items())[:3]:
+            top_categories.append(f"• {category}: {count}")
+        
+        categories_text = "\n".join(top_categories) if top_categories else "• No categories"
+        
+        message = f"""
+{account_emoji} *CSV Transactions Added*
+
+📊 **Account:** {account.title()}
+💾 **Transactions:** {saved_count} added
+
+🏷️ **Top Categories:**
+{categories_text}
+
+✅ All transactions successfully saved!
+        """.strip()
+        
         self.send_message(message)

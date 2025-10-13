@@ -16,6 +16,7 @@ GOALS_TABLE = os.environ.get("GOALS_TABLE", "FinanceTracker-Goals")
 INSIGHTS_TABLE = os.environ.get("INSIGHTS_TABLE", "FinanceTracker-Insights")
 ACCOUNT_BALANCES_TABLE = os.environ.get("ACCOUNT_BALANCES_TABLE", "FinanceTracker-AccountBalances")
 BALANCE_SNAPSHOTS_TABLE = os.environ.get("BALANCE_SNAPSHOTS_TABLE", "FinanceTracker-BalanceSnapshots")
+LEARNING_DATA_TABLE = os.environ.get("LEARNING_DATA_TABLE", "FinanceTracker-LearningData")
 
 
 transactions_table = dynamodb.Table(TRANSACTIONS_TABLE)
@@ -25,6 +26,7 @@ goals_table = dynamodb.Table(GOALS_TABLE)
 insights_table = dynamodb.Table(INSIGHTS_TABLE)
 account_balances_table = dynamodb.Table(ACCOUNT_BALANCES_TABLE)
 balance_snapshots_table = dynamodb.Table(BALANCE_SNAPSHOTS_TABLE)
+learning_data_table = dynamodb.Table(LEARNING_DATA_TABLE)
 
 
 def init_db():
@@ -667,3 +669,390 @@ def calculate_period_summary(user_id: str, start_date: str, end_date: str) -> Di
         },
         "transaction_count": len(period_transactions)
     }
+
+
+# ===== LEARNING SYSTEM FUNCTIONS =====
+
+def save_learning_correction(user_id: str, description: str, original_category: str, 
+                           corrected_category: str, amount: float, confidence: float) -> str:
+    """
+    Save a user correction to the learning database.
+    
+    Args:
+        user_id: User ID
+        description: Transaction description
+        original_category: What the system classified it as
+        corrected_category: What the user changed it to
+        amount: Transaction amount
+        confidence: Original confidence score
+    
+    Returns:
+        learning_id: Unique ID for this learning entry
+    """
+    learning_id = str(uuid.uuid4())
+    timestamp = datetime.utcnow().isoformat()
+    
+    # Extract keywords from description for pattern matching
+    keywords = extract_keywords(description)
+    
+    learning_data_table.put_item(
+        Item={
+            "user_id": user_id,
+            "learning_id": learning_id,
+            "type": "correction",
+            "description": description,
+            "keywords": keywords,
+            "original_category": original_category,
+            "corrected_category": corrected_category,
+            "amount": Decimal(str(amount)),
+            "original_confidence": Decimal(str(confidence)),
+            "timestamp": timestamp,
+            "learned_at": timestamp
+        }
+    )
+    
+    return learning_id
+
+
+def get_learning_patterns(user_id: str, limit: int = 100) -> List[Dict]:
+    """
+    Get learning patterns for a user to improve classification.
+    
+    Args:
+        user_id: User ID
+        limit: Maximum number of patterns to return
+    
+    Returns:
+        List of learning patterns
+    """
+    try:
+        response = learning_data_table.query(
+            KeyConditionExpression="user_id = :user_id",
+            ExpressionAttributeValues={":user_id": user_id},
+            ScanIndexForward=False,  # Most recent first
+            Limit=limit
+        )
+        
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error getting learning patterns: {e}")
+        return []
+
+
+def extract_keywords(description: str) -> List[str]:
+    """
+    Extract meaningful keywords from transaction description.
+    
+    Args:
+        description: Transaction description
+    
+    Returns:
+        List of keywords for pattern matching
+    """
+    import re
+    
+    # Clean and normalize
+    text = description.lower().strip()
+    
+    # Remove common words that don't help classification
+    stop_words = {
+        'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 
+        'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 
+        'after', 'above', 'below', 'between', 'among', 'under', 'over', 'around'
+    }
+    
+    # Extract words (alphanumeric + some special chars)
+    words = re.findall(r'\b[a-z0-9]+\b', text)
+    
+    # Filter out stop words and short words
+    keywords = [word for word in words if len(word) > 2 and word not in stop_words]
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_keywords = []
+    for word in keywords:
+        if word not in seen:
+            seen.add(word)
+            unique_keywords.append(word)
+    
+    return unique_keywords[:10]  # Limit to 10 most relevant keywords
+
+
+def apply_learning_to_classification(user_id: str, description: str, amount: float) -> Optional[str]:
+    """
+    Apply learned patterns to improve classification.
+    
+    Args:
+        user_id: User ID
+        description: Transaction description
+        amount: Transaction amount
+    
+    Returns:
+        Learned category if pattern matches, None otherwise
+    """
+    try:
+        # Get recent learning patterns
+        patterns = get_learning_patterns(user_id, limit=50)
+        
+        if not patterns:
+            return None
+        
+        # Extract keywords from current description
+        current_keywords = extract_keywords(description)
+        
+        # Find matching patterns
+        for pattern in patterns:
+            if pattern.get('type') != 'correction':
+                continue
+                
+            pattern_keywords = pattern.get('keywords', [])
+            corrected_category = pattern.get('corrected_category')
+            
+            # Check for keyword overlap
+            overlap = set(current_keywords) & set(pattern_keywords)
+            overlap_ratio = len(overlap) / max(len(current_keywords), 1)
+            
+            # If significant overlap, use the learned category
+            if overlap_ratio >= 0.3:  # 30% keyword overlap
+                print(f"🧠 Learning applied: '{description}' → '{corrected_category}' (overlap: {overlap_ratio:.1%})")
+                return corrected_category
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error applying learning: {e}")
+        return None
+
+
+def get_learning_stats(user_id: str) -> Dict:
+    """
+    Get learning statistics for a user.
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        Dictionary with learning statistics
+    """
+    try:
+        patterns = get_learning_patterns(user_id, limit=1000)
+        
+        if not patterns:
+            return {
+                "total_corrections": 0,
+                "categories_learned": {},
+                "accuracy_improvement": 0,
+                "recent_activity": []
+            }
+        
+        # Count corrections by category
+        category_counts = {}
+        recent_corrections = []
+        
+        for pattern in patterns:
+            if pattern.get('type') == 'correction':
+                corrected_cat = pattern.get('corrected_category', 'Unknown')
+                category_counts[corrected_cat] = category_counts.get(corrected_cat, 0) + 1
+                
+                # Recent activity (last 10)
+                if len(recent_corrections) < 10:
+                    recent_corrections.append({
+                        "description": pattern.get('description', '')[:50],
+                        "from": pattern.get('original_category', ''),
+                        "to": corrected_cat,
+                        "timestamp": pattern.get('timestamp', '')
+                    })
+        
+        return {
+            "total_corrections": len(patterns),
+            "categories_learned": category_counts,
+            "accuracy_improvement": min(len(patterns) * 2, 50),  # Estimate improvement
+            "recent_activity": recent_corrections
+        }
+        
+    except Exception as e:
+        print(f"Error getting learning stats: {e}")
+        return {"error": str(e)}
+
+
+def scan_existing_transactions_for_learning(user_id: str, limit: int = 1000) -> Dict:
+    """
+    Scan existing transactions to learn patterns and create learning data.
+    
+    This analyzes your historical transactions to:
+    1. Find common merchant patterns
+    2. Extract category-to-description mappings
+    3. Create learning entries for future classification
+    
+    Args:
+        user_id: User ID
+        limit: Maximum transactions to analyze
+    
+    Returns:
+        Dictionary with scan results and learning statistics
+    """
+    try:
+        # Get all transactions
+        transactions = get_transactions(user_id, limit=limit)
+        
+        if not transactions:
+            return {
+                "status": "no_data",
+                "message": "No transactions found to learn from",
+                "patterns_created": 0
+            }
+        
+        # Analyze patterns
+        patterns_created = 0
+        merchant_patterns = {}
+        category_patterns = {}
+        
+        for tx in transactions:
+            description = tx.get('description', '').strip()
+            category = tx.get('category', '').strip()
+            amount = float(tx.get('amount', 0))
+            
+            if not description or not category or category in ['Uncategorized', 'Transfers']:
+                continue
+            
+            # Extract keywords from description
+            keywords = extract_keywords(description)
+            if not keywords:
+                continue
+            
+            # Build merchant patterns (same merchant → same category)
+            merchant_key = description.lower().strip()
+            if merchant_key not in merchant_patterns:
+                merchant_patterns[merchant_key] = {
+                    'category': category,
+                    'count': 0,
+                    'keywords': keywords,
+                    'amounts': []
+                }
+            
+            merchant_patterns[merchant_key]['count'] += 1
+            merchant_patterns[merchant_key]['amounts'].append(amount)
+            
+            # Build category patterns (keywords → category)
+            for keyword in keywords:
+                if keyword not in category_patterns:
+                    category_patterns[keyword] = {}
+                if category not in category_patterns[keyword]:
+                    category_patterns[keyword][category] = 0
+                category_patterns[keyword][category] += 1
+        
+        # Create learning entries for strong patterns
+        for merchant, pattern in merchant_patterns.items():
+            if pattern['count'] >= 2:  # At least 2 transactions with same merchant
+                # Create a learning entry
+                learning_id = str(uuid.uuid4())
+                timestamp = datetime.utcnow().isoformat()
+                
+                # Calculate confidence based on consistency
+                confidence = min(0.8, 0.5 + (pattern['count'] * 0.1))
+                
+                learning_data_table.put_item(
+                    Item={
+                        "user_id": user_id,
+                        "learning_id": learning_id,
+                        "type": "historical_pattern",
+                        "description": merchant,
+                        "keywords": pattern['keywords'],
+                        "original_category": "Uncategorized",  # Assume it was unclassified
+                        "corrected_category": pattern['category'],
+                        "amount": Decimal(str(sum(pattern['amounts']) / len(pattern['amounts']))),  # Average amount
+                        "original_confidence": Decimal(str(confidence)),
+                        "timestamp": timestamp,
+                        "learned_at": timestamp,
+                        "pattern_strength": pattern['count'],
+                        "source": "historical_scan"
+                    }
+                )
+                patterns_created += 1
+        
+        # Create category keyword patterns
+        for keyword, categories in category_patterns.items():
+            if len(categories) == 1:  # Keyword only maps to one category
+                category = list(categories.keys())[0]
+                count = list(categories.values())[0]
+                
+                if count >= 3:  # Strong keyword pattern
+                    learning_id = str(uuid.uuid4())
+                    timestamp = datetime.utcnow().isoformat()
+                    
+                    learning_data_table.put_item(
+                        Item={
+                            "user_id": user_id,
+                            "learning_id": learning_id,
+                            "type": "keyword_pattern",
+                            "description": f"Keyword: {keyword}",
+                            "keywords": [keyword],
+                            "original_category": "Uncategorized",
+                            "corrected_category": category,
+                            "amount": Decimal("0"),  # No specific amount
+                            "original_confidence": Decimal("0.7"),
+                            "timestamp": timestamp,
+                            "learned_at": timestamp,
+                            "pattern_strength": count,
+                            "source": "keyword_scan"
+                        }
+                    )
+                    patterns_created += 1
+        
+        return {
+            "status": "success",
+            "transactions_analyzed": len(transactions),
+            "merchant_patterns": len(merchant_patterns),
+            "keyword_patterns": len(category_patterns),
+            "patterns_created": patterns_created,
+            "top_merchants": sorted(
+                [(k, v['count']) for k, v in merchant_patterns.items()],
+                key=lambda x: x[1],
+                reverse=True
+            )[:10],
+            "top_keywords": sorted(
+                [(k, sum(v.values())) for k, v in category_patterns.items()],
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]
+        }
+        
+    except Exception as e:
+        print(f"Error scanning transactions for learning: {e}")
+        return {"error": str(e)}
+
+
+def get_learning_scan_stats(user_id: str) -> Dict:
+    """
+    Get statistics about learning scan results.
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        Dictionary with scan statistics
+    """
+    try:
+        # Get all learning patterns
+        patterns = get_learning_patterns(user_id, limit=1000)
+        
+        # Separate by source
+        historical_patterns = [p for p in patterns if p.get('source') == 'historical_scan']
+        keyword_patterns = [p for p in patterns if p.get('source') == 'keyword_scan']
+        user_corrections = [p for p in patterns if p.get('type') == 'correction']
+        
+        return {
+            "total_patterns": len(patterns),
+            "historical_patterns": len(historical_patterns),
+            "keyword_patterns": len(keyword_patterns),
+            "user_corrections": len(user_corrections),
+            "learning_sources": {
+                "historical_scan": len(historical_patterns),
+                "keyword_scan": len(keyword_patterns),
+                "user_corrections": len(user_corrections)
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting learning scan stats: {e}")
+        return {"error": str(e)}

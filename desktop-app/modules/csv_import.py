@@ -234,6 +234,16 @@ class CSVImportModule:
     def on_import_complete(self, success, result):
         """Handle import completion"""
         if success:
+            # Send Telegram notification for CSV import
+            if self.api and hasattr(self.api, 'telegram'):
+                summary = result.get("summary", {})
+                account = self.account_selector.currentData()
+                self.api.telegram.notify_csv_import(
+                    summary.get("total", 0), 
+                    summary.get("auto-classified", 0),
+                    account
+                )
+            
             self.show_import_results(result)
         else:
             QMessageBox.critical(self.parent, "Error", result)
@@ -537,8 +547,16 @@ class CSVImportModule:
 
     def on_category_changed(self, new_category, row, combo):
         """Handle category dropdown change"""
+        # Get the transaction data
+        tx = self.pending_transactions[row]
+        original_category = tx.get("category", "Uncategorized")
+        
         # Update the transaction data
         self.pending_transactions[row]["category"] = new_category
+        
+        # Track correction for learning if category actually changed
+        if original_category != new_category and self.api:
+            self.track_correction_for_learning(tx, original_category, new_category)
         
         # Update status column to show it's been reviewed
         status_item = self.results_table.item(row, 0)
@@ -604,6 +622,25 @@ class CSVImportModule:
 
             if response.status_code == 200:
                 result = response.json()
+                
+                # Send enhanced Telegram notification
+                if self.api and hasattr(self.api, 'telegram'):
+                    # Get account from first transaction (they should all be the same)
+                    account = transactions[0].get('account', 'main') if transactions else 'main'
+                    
+                    # Calculate categories summary
+                    categories_summary = {}
+                    for tx in transactions:
+                        category = tx.get('category', 'Uncategorized')
+                        categories_summary[category] = categories_summary.get(category, 0) + 1
+                    
+                    # Send enhanced notification
+                    self.api.telegram.notify_csv_commit(
+                        result['saved'], 
+                        account, 
+                        categories_summary
+                    )
+                
                 QMessageBox.information(
                     self.parent,
                     "Success",
@@ -648,3 +685,37 @@ class CSVImportModule:
         finally:
             self.commit_button.setEnabled(True)
             self.commit_button.setText("💾 Commit Transactions")
+
+    def track_correction_for_learning(self, tx, original_category, corrected_category):
+        """Track user correction for learning system"""
+        try:
+            import requests
+            
+            # Get original confidence from classification
+            classification = tx.get("classification", {})
+            confidence = classification.get("confidence", 0.5)
+            
+            # Send correction to learning API
+            correction_data = {
+                "user_id": "user1",  # Default user ID
+                "description": tx.get("description", ""),
+                "original_category": original_category,
+                "corrected_category": corrected_category,
+                "amount": tx.get("amount", 0),
+                "confidence": confidence
+            }
+            
+            response = requests.post(
+                f"{self.api.aws_api_url}/learning/correction",
+                json=correction_data,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                print(f"🧠 Learning: '{tx.get('description', '')[:30]}...' {original_category} → {corrected_category}")
+            else:
+                print(f"Learning API error: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Learning tracking error: {e}")
+            # Don't show error to user, learning is optional

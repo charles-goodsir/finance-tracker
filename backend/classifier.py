@@ -113,22 +113,33 @@ classification_rules = {
 }
 
 
-def classify(description, amount, use_ai: bool = True):
+def classify(description, amount, use_ai: bool = True, user_id: str = "user1"):
     """
     Classify a transaction using hybrid approach:
-    1. Try rule-based classification first (fast & free)
-    2. If uncertain, use AI as fallback (if enabled)
+    1. Try learning patterns first (user corrections)
+    2. Try rule-based classification (fast & free)
+    3. If uncertain, use AI as fallback (if enabled)
     
     Args:
         description: Transaction description
         amount: Transaction amount
         use_ai: Enable AI fallback for uncertain cases
+        user_id: User ID for learning patterns
     
     Returns: (category, confidence, reason)
     """
     description_lower = description.lower().strip()
 
-    # Special case for credit card payments - check this FIRST
+    # Step 1: Try learning patterns first (user corrections)
+    try:
+        from aws_db import apply_learning_to_classification
+        learned_category = apply_learning_to_classification(user_id, description, amount)
+        if learned_category:
+            return learned_category, 0.85, "Learned from user corrections"
+    except Exception as e:
+        print(f"Learning system error: {e}")
+
+    # Step 2: Special case for credit card payments - check this FIRST
     if "payment received" in description_lower:
         return "Credit Card Payments", 0.9, "Credit card payment detected"
 
