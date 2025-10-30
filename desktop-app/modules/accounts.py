@@ -22,8 +22,18 @@ class AccountsModule:
         self.setup_ui()
 
     def setup_ui(self):
+        # Wrap entire page in a scroll area to avoid squishing
+        main_layout = QVBoxLayout()
+        self.parent.setLayout(main_layout)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
         layout = QVBoxLayout()
-        self.parent.setLayout(layout)
+        content_widget.setLayout(layout)
 
         # Title
         title = QLabel("🏦 Account Management")
@@ -260,8 +270,6 @@ class AccountsModule:
         self.snapshots_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.snapshots_table)
 
-        layout.addStretch()
-
         # Status label
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -269,6 +277,10 @@ class AccountsModule:
             "color: #4CAF50; font-weight: bold; padding: 10px;"
         )
         layout.addWidget(self.status_label)
+
+        # Finish scroll setup
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
 
     def save_balance(self, account):
         """Save individual account balance"""
