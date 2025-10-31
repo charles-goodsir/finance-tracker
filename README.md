@@ -2,6 +2,55 @@
 
 A comprehensive personal finance management system with **AI-powered classification**, AWS cloud deployment, and a modern PyQt6 desktop interface.
 
+## 🚦 First‑Time Users: 10‑Minute Setup
+
+Follow this section end‑to‑end if you’re new. It covers desktop setup, API config, and your first sync.
+
+### 1) Install and run the desktop app
+
+```bash
+cd desktop-app
+pip install -r requirements.txt
+python main_gui.py
+```
+
+### 2) Configure your API URL and secrets
+
+Create a `.env` file in the project root:
+
+```env
+# AWS API Gateway base URL (no trailing slash)
+AWS_API_URL="https://<api-id>.execute-api.<region>.amazonaws.com/Prod"
+
+# Optional integrations
+TELEGRAM_BOT_TOKEN=your_telegram_token
+TELEGRAM_CHAT_ID=your_chat_id
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+Restart the desktop app so it picks up the `.env`.
+
+### 3) First‑run workflow (repeat monthly)
+
+1. Go to the 🏦 Accounts tab → enter balances for Savings, Bills, Main, and Credit Card → Save
+2. Click 📸 Save Monthly Snapshot for today’s date
+3. Go to 📁 CSV Import → choose account → select bank CSV → review categories → Commit to AWS
+4. Open 📊 Dashboard → click Refresh to load stats and insights
+
+Tip: On the 10th each month, an EventBridge cron can send a Telegram reminder.
+
+### 4) How the numbers are calculated
+
+- Spending excludes: `Transfers`, `Payment`, `Cash Withdrawal`, `Credit Card Payments`
+- Savings rate = 100 × (income − spending) / income
+- Credit utilization = abs(credit debt) / credit limit (limit is 4000 by default in UI)
+
+### 5) Troubleshooting quick fixes
+
+- Insights blank? Ensure `.env` has `AWS_API_URL`, then click Refresh
+- Insights show only emojis? Ensure the insights label text color is dark (e.g., `#1a202c`)
+- AI rate‑limited? Rule‑based classification and learning reduce calls; corrections improve future imports
+
 ## ✨ Key Features
 
 ### 🤖 **NEW: AI-Powered Classification**
@@ -55,14 +104,14 @@ A comprehensive personal finance management system with **AI-powered classificat
 1. **Setup and run**:
    ```bash
    cd desktop-app
-   pip install -r requirements.txt  # Install PyQt6 dependencies
+   pip install -r requirements.txt
    python main_gui.py
    ```
 
 2. **Configure API**:
-   - Go to Settings tab
-   - Enter your AWS API URL
-   - (Optional) Add Telegram credentials
+   - Create `.env` in the project root with `AWS_API_URL`
+   - Restart the app so the environment is picked up
+   - (Optional) Add Telegram and Gemini keys
 
 ### Backend API (Local)
 
@@ -88,6 +137,49 @@ A comprehensive personal finance management system with **AI-powered classificat
    - API: http://localhost:8000
    - Docs: http://localhost:8000/docs
 
+## 🧭 Using Finance Tracker Without AWS
+
+You can run the app fully offline or without deploying any AWS resources.
+
+### Option 1 — Desktop‑only (no backend)
+
+- Leave `AWS_API_URL` unset in your project‑root `.env` (or omit `.env`).
+- Works offline using the local SQLite cache.
+- You can: import CSVs, edit categories, and view a basic dashboard from local data.
+- Not available: Cloud sync, Insights/Health, Telegram notifications, learning system.
+
+Steps:
+```bash
+cd desktop-app
+pip install -r requirements.txt
+python main_gui.py
+```
+
+### Option 2 — Local API (no cloud)
+
+Run the backend locally and point the desktop app to it.
+
+1) Start the API locally:
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app:app --reload
+```
+
+2) Point the desktop app to your local API in project‑root `.env`:
+```env
+AWS_API_URL="http://localhost:8000"
+```
+
+3) (Optional) Avoid any AWS dependency by running DynamoDB Local:
+```bash
+docker run -p 8001:8000 amazon/dynamodb-local
+# If your config supports it, set an endpoint override for the backend:
+# DYNAMODB_ENDPOINT_URL=http://localhost:8001
+```
+
+With a working local store (AWS or DynamoDB Local), Insights, Financial Health, and the learning system will function as normal.
+
 ## ☁️ AWS Deployment
 
 ### Deploy to AWS
@@ -111,7 +203,7 @@ sam deploy --parameter-overrides \
   - Insights
   - Account Balances
 - **API Gateway**: RESTful API endpoints
-- **CloudWatch**: Scheduled recurring transaction processing
+- **EventBridge/CloudWatch**: Monthly Telegram reminder schedule
 
 ## 🤖 AI Setup (Optional)
 
@@ -158,7 +250,7 @@ See [AI_SETUP.md](AI_SETUP.md) for detailed documentation.
 - `POST /ai/classify` - Manually classify with AI
 
 ### Financial Intelligence
-- `GET /insights` - Get spending alerts & suggestions
+- `GET /insights` - Get spending alerts & suggestions (top‑level keys)
 - `GET /accounts/networth` - Calculate net worth
 - `GET /accounts/balances` - Get all account balances
 - `POST /accounts/balance` - Update account balance
@@ -244,6 +336,11 @@ finance-tracker/
    - 💡 Savings Suggestions
    - 📈 Trends (excludes transfers!)
 
+You can also test the endpoint directly:
+```bash
+curl "$AWS_API_URL/insights?user_id=user1" | jq
+```
+
 ### 4. Set Goals
 
 **Desktop App**:
@@ -279,16 +376,12 @@ TELEGRAM_CHAT_ID=your_chat_id
 # AI Classification (optional)
 GEMINI_API_KEY=your_gemini_api_key
 
-# Desktop App Local Database
-# (automatically created in desktop-app/finance_tracker.db)
+# Desktop App Local Database (automatically created in desktop-app/finance_tracker.db)
 ```
 
 ### Desktop App Settings
 
-Edit `desktop-app/api_client.py` to set your AWS API URL:
-```python
-self.aws_api_url = "https://your-api-gateway-url.com/Prod"
-```
+Preferred: set the API URL via `.env` (`AWS_API_URL`). The app reads it automatically on startup—no code edits needed.
 
 ## 🧪 Testing
 
