@@ -132,6 +132,8 @@ class AccountsModule:
         # Create credit card widget
         self.credit_card_widget = CreditCardWidget(self.api)
         layout.addWidget(self.credit_card_widget)
+        
+        self.credit_card_widget.load_from_aws()
 
         # Connect button actions
         self.credit_card_widget.view_transactions_btn.clicked.connect(

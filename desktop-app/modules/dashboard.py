@@ -112,6 +112,7 @@ class DashboardModule:
                 border: 1px solid #ddd;
                 font-size: 13px;
                 line-height: 1.4;
+                color: black;
             }
         """
         )
@@ -440,47 +441,47 @@ class DashboardModule:
             print(f"Error loading savings rate: {e}")
 
     def load_quick_insights(self):
-        """Load quick insights from the insights API"""
-        if not self.api:
-            self.insights_text.setText("API not available")
-            return
-        try:
+      """Load quick insights from the insights API (top-level keys)"""
+      if not self.api:
+          self.insights_text.setText("• API not available")
+          return
+      try:
+          r = requests.get(f"{self.api.aws_api_url}/insights?user_id=user1", timeout=10)
+          if r.status_code != 200:
+              self.insights_text.setText("• Server error - try refreshing")
+              return
+          d = r.json()
 
-            response = requests.get(
-                f"{self.api.aws_api_url}/insights?user_id=user1", timeout=10
-            )
+          alerts = [a.get("message") for a in d.get("alerts", []) if a.get("message")]
+          suggestions = [s.get("message") for s in d.get("suggestions", []) if s.get("message")]
 
-            if response.status_code != 200:
-                self.insights_text.setText("• Server error - try refreshing")
-                return
-            data = response.json()
-            insights = data.get("insights", {})
+          t = d.get("trends") or {}
+          trend_line = (
+              f"📈 Spending change vs last period: {t.get('spending_change_percent'):.1f}% "
+              f"(prev ${t.get('previous_spending'):,.2f})"
+              if t.get("spending_change_percent") is not None and t.get("previous_spending") is not None
+              else None
+          )
 
-            insight_sources = [
-                ("alerts", 2),
-                ("suggestions", 1),
-                ("trends", 1),
-                ("forecasts", 1),
-            ]
+          fcast = d.get("forecast") or {}
+          forecast_line = (
+              f"🔮 Projected monthly spending: ${fcast.get('projected_monthly_spending'):,.2f}"
+              if fcast.get("projected_monthly_spending") is not None
+              else None
+          )
 
-            all_insights = [
-                insight
-                for source, limit in insight_sources
-                for insight in insights.get(source, [])[:limit]
-            ]
+          lines = [*alerts[:2], *suggestions[:1], trend_line, forecast_line]
+          self.insights_text.setText("\n".join(f"• {x}" for x in lines if x) or "• No insights available")
 
-            if all_insights:
-                insights_text = "\n".join([f"• {insight}" for insight in all_insights])
-                self.insights_text.setText(insights_text)
-            else:
-                self.insights_text.setText("• No insights available at the moment")
-        except requests.exceptions.Timeout:
-            self.insights_text.setText("• Request timeout - try again")
-        except requests.exceptions.ConnectionError:
-            self.insights_text.setText("• Connection error - check network")
-        except Exception as e:
-            print(f"Error loading insights: {e}")
-            self.insights_text.setText("• Unable to load insights")
+      except requests.exceptions.Timeout:
+          self.insights_text.setText("• Request timeout - try again")
+      except requests.exceptions.ConnectionError:
+          self.insights_text.setText("• Connection error - check network")
+      except Exception as e:
+          print(f"Error loading insights: {e}")
+          self.insights_text.setText("• Unable to load insights")
+          
+    
 
     def load_financial_health(self):
         """Load financial health score from AWS"""
