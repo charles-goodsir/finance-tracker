@@ -39,7 +39,7 @@ def lambda_handler(event, context):
 Open your Finance Tracker app to get started 🚀
     """
 
-    url = "https://api.telegram.org/bot{bot_token}/sendMessage"
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
     try:
         response = requests.post(
@@ -49,7 +49,7 @@ Open your Finance Tracker app to get started 🚀
         )
 
         if response.status_code == 200:
-            print("✅ Sent monthly reminder for {current_month}")
+            print(f"✅ Sent monthly reminder for {current_month}")
             return {"status_Code": 200, "body": f"Reminder sent for {current_month}"}
         else:
             print(f"❌ Failed to send: {response.text}")

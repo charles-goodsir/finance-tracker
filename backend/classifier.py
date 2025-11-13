@@ -22,6 +22,19 @@ classification_rules = {
         "credit card bill",
         "card payment",
         "payment to card",
+        "cc payment",
+        "credit payment",
+        "card bill payment",
+        "visa payment",
+        "mastercard payment",
+        "amex payment",
+        "credit card transfer",
+        "card transfer",
+        "pay credit card",
+        "credit card repayment",
+        "card repayment",
+        "payment - credit card",
+        "automatic payment - card",
     ],
     "Payment": [
         "errington",
@@ -146,7 +159,18 @@ def classify(description, amount, use_ai: bool = True, user_id: str = "user1"):
         print(f"Learning system error: {e}")
 
     # Step 2: Special case for credit card payments - check this FIRST
-    if "payment received" in description_lower:
+    # Common patterns: "payment received", "credit card", "card payment", etc.
+    credit_card_keywords = [
+        "payment received",
+        "credit card payment",
+        "credit card bill",
+        "card payment",
+        "payment to card",
+        "cc payment",
+        "pay credit card",
+        "credit card transfer",
+    ]
+    if any(keyword in description_lower for keyword in credit_card_keywords):
         return "Credit Card Payments", 0.9, "Credit card payment detected"
 
     # Check each category for matches

@@ -279,7 +279,7 @@ Resources:
         MonthlySchedule:
           Type: Schedule
           Properties:
-            Schedule: cron(0 20 9 * ? *)
+            Schedule: cron(0 20 10 * ? *)
             Description: Monthly finance tracking reminder on the 10th
             Enabled: true
 

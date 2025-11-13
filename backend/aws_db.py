@@ -110,6 +110,32 @@ def add_transaction(
     return transaction_id
 
 
+def update_transaction_category(
+    user_id: str, transaction_id: str, new_category: str
+) -> bool:
+    """Update the category of an existing transaction"""
+    try:
+        # First check if transaction exists
+        response = transactions_table.get_item(
+            Key={"user_id": user_id, "transaction_id": transaction_id}
+        )
+        
+        if "Item" not in response:
+            print(f"Transaction {transaction_id} not found for user {user_id}")
+            return False
+        
+        # Update the transaction
+        transactions_table.update_item(
+            Key={"user_id": user_id, "transaction_id": transaction_id},
+            UpdateExpression="SET category = :category",
+            ExpressionAttributeValues={":category": new_category},
+        )
+        return True
+    except Exception as e:
+        print(f"Error updating transaction category: {e}")
+        return False
+
+
 def get_transactions(user_id: str, limit: int = 100) -> List[Dict]:
     """Get transactions for a user"""
     response = transactions_table.query(
@@ -580,12 +606,18 @@ def save_balance_snapshot(
     """
     Save a balance snapshot for a specific date.
     Used for month-end balance tracking.
+    
+    Note: total_assets represents net worth (assets - liabilities),
+    where credit card debt is subtracted as a liability.
     """
     try:
+        # Calculate net worth (assets - liabilities)
+        # Credit card debt is a liability, so subtract it from assets
         total_assets = (
             balances.get("savings", 0)
             + balances.get("bills", 0)
             + balances.get("main", 0)
+            - balances.get("credit", 0)  # Subtract credit card debt
         )
 
         balance_snapshots_table.put_item(
@@ -691,7 +723,32 @@ def calculate_period_summary(user_id: str, start_date: str, end_date: str) -> Di
         and t.get("category") not in excluded_categories
     ]
 
-    # Calculate transaction-based (including credit card transactions)
+    # Track credit card activity for diagnostics
+    credit_transactions = [
+        t
+        for t in transactions
+        if start_date
+        <= t.get("date", "")[:10]
+        <= end_date
+        and t.get("category") not in excluded_categories
+        and t.get("account", "").lower() == "credit"
+    ]
+
+    credit_charges = sum(
+        abs(float(t["amount"]))
+        for t in credit_transactions
+        if float(t["amount"]) < 0
+    )
+    credit_payments = sum(
+        float(t["amount"])
+        for t in transactions
+        if start_date
+        <= t.get("date", "")[:10]
+        <= end_date
+        and t.get("category") == "Credit Card Payments"
+    )
+
+    # Calculate transaction-based (including credit card spending, but credit card payments are excluded via category)
     total_income = sum(
         float(t["amount"]) for t in period_transactions if float(t["amount"]) > 0
     )
@@ -750,6 +807,16 @@ def calculate_period_summary(user_id: str, start_date: str, end_date: str) -> Di
             "spending": abs(total_spending),
             "net_savings": transaction_savings,
             "savings_rate": round(savings_rate, 1),
+        },
+        "credit_card": {
+            "charges": credit_charges,
+            "payments": credit_payments,
+            "net_change": round(
+                (end_snapshot["credit"] - start_snapshot["credit"])
+                if start_snapshot and end_snapshot
+                else 0,
+                2,
+            ),
         },
         "verification": {
             "status": status,

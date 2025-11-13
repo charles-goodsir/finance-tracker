@@ -177,6 +177,40 @@ def add_transaction_endpoint(tx: TransactionIn):
     return {"status": "ok", "message": text}
 
 
+@app.put("/transactions/{transaction_id}/category")
+def update_transaction_category_endpoint(
+    transaction_id: str, category: str, user_id: str = "user1"
+):
+    """Update the category of an existing transaction"""
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+        from aws_db import update_transaction_category
+
+        success = update_transaction_category(user_id, transaction_id, category)
+        if success:
+            return {
+                "status": "ok",
+                "message": f"Updated transaction {transaction_id} to {category}",
+            }
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Transaction {transaction_id} not found for user {user_id}"
+            )
+    else:
+        # Local SQLite update
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE transactions SET category = ? WHERE user_id = ? AND id = ?",
+            (category, user_id, transaction_id),
+        )
+        conn.commit()
+        conn.close()
+        return {
+            "status": "ok",
+            "message": f"Updated transaction {transaction_id} to {category}",
+        }
+
+
 @app.get("/transactions")
 def list_transactions(user_id: str = "default", limit: int = 100):
     if os.getenv("AWS_LAMBDA_FUNCTION_NAME"):

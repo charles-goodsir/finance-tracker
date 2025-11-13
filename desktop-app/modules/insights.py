@@ -112,8 +112,18 @@ class InsightsModule:
             )
 
     def setup_ui(self):
+        # Wrap entire page in a scroll area to avoid squishing
+        main_layout = QVBoxLayout()
+        self.parent.setLayout(main_layout)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
         layout = QVBoxLayout()
-        self.parent.setLayout(layout)
+        content_widget.setLayout(layout)
 
         # Title
         title = QLabel("💰 Smart Insights")
@@ -380,6 +390,10 @@ class InsightsModule:
         # Load data after UI is created
         self.load_insights_from_aws()
 
+        # Finish scroll setup
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+
     def load_spending_alerts(self):
         """Load spending alerts and suggestions"""
         self.alerts_list.clear()
@@ -478,6 +492,8 @@ class InsightsModule:
             </div>
             """
 
+        credit_card = data.get("credit_card", {})
+
         # Transaction-based section
         summary_html += f"""
         <div style="background-color: #2d3748; padding: 15px; border-radius: 8px; margin: 10px 0;">
@@ -493,6 +509,26 @@ class InsightsModule:
             </p>
         </div>
         """
+
+        # Credit card section (helps explain discrepancies)
+        if credit_card:
+            charges = credit_card.get("charges", 0)
+            payments = credit_card.get("payments", 0)
+            net_change = credit_card.get("net_change", 0)
+
+            summary_html += f"""
+            <div style="background-color: #2d3748; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                <h4 style="color: #facc15; margin-bottom: 10px;">💳 Credit Card Activity</h4>
+                <p><b>Charges this period:</b> ${charges:,.2f}</p>
+                <p><b>Payments made:</b> ${payments:,.2f}</p>
+                <p><b>Net card balance change:</b> ${net_change:,.2f}</p>
+                <p style="color: #facc15; font-size: 12px; margin-top: 10px;">
+                    Transaction-based savings include the card spending immediately, while balance-based
+                    only reflects cash going in/out plus the change in card balance. A gap here often means
+                    recent card purchases haven’t been paid off yet.
+                </p>
+            </div>
+            """
 
         # Verification section
         status = verification.get("status", "unknown")

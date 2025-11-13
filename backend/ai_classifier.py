@@ -102,13 +102,15 @@ Categorize this transaction into ONE of these categories:
 {', '.join(VALID_CATEGORIES)}
 
 Classification Rules:
-1. If it's a transfer between accounts (e.g., "payment received"), return "Transfers"
-2. If amount is positive and looks like salary/wages/income, return "Income"
-3. Grocery stores (Countdown, Woolworths, Pak'n Save, New World) → "Groceries"
-4. Restaurants/cafes/takeaways → "Dining Out"
-5. Uber, parking, petrol, public transport → "Transport"
-6. Power, internet, phone, insurance → "Bills & Utilities"
-7. Credit card payments → "Credit Card Payments"
+1. Credit card payments (paying off credit card from bank account) → "Credit Card Payments"
+   - Look for: "payment received", "credit card payment", "card payment", "pay credit card", etc.
+   - These are transfers to pay off debt, NOT spending
+2. If it's a transfer between accounts (but NOT credit card payment), return "Transfers"
+3. If amount is positive and looks like salary/wages/income, return "Income"
+4. Grocery stores (Countdown, Woolworths, Pak'n Save, New World) → "Groceries"
+5. Restaurants/cafes/takeaways → "Dining Out"
+6. Uber, parking, petrol, public transport → "Transport"
+7. Power, internet, phone, insurance → "Bills & Utilities"
 8. Be specific - choose the most accurate category
 
 Respond with ONLY the category name from the list above. No explanation, no punctuation, just the category name."""
